@@ -53,15 +53,14 @@ void CMenus::DoPopupMenu()
 {
 	if(m_PopupActive)
 	{
-		bool Inside = UI()->MouseInside(&s_Popups.m_Rect);
 		UI()->SetHotItem(&s_Popups.m_pId);
 
 		if(UI()->CheckActiveItem(&s_Popups.m_pId))
 		{
 			if(!UI()->MouseButton(0))
 			{
-				if(!Inside)
-				m_PopupActive = false;
+				if(!UI()->MouseHovered(&s_Popups.m_Rect))
+					m_PopupActive = false;
 				UI()->SetActiveItem(0);
 			}
 		}
@@ -71,20 +70,20 @@ void CMenus::DoPopupMenu()
 				UI()->SetActiveItem(&s_Popups.m_pId);
 		}
 
-		int Corners = CUI::CORNER_ALL;
+		int Corners = CUIRect::CORNER_ALL;
 		if(s_Popups.m_IsMenu)
-			Corners = CUI::CORNER_R|CUI::CORNER_B;
+			Corners = CUIRect::CORNER_R|CUIRect::CORNER_B;
 
 		CUIRect r = s_Popups.m_Rect;
-		RenderTools()->DrawUIRect(&r, vec4(0.5f,0.5f,0.5f,0.75f), Corners, 3.0f);
+		r.Draw(vec4(0.5f,0.5f,0.5f,0.75f), 3.0f, Corners);
 		r.Margin(1.0f, &r);
-		RenderTools()->DrawUIRect(&r, vec4(0,0,0,0.75f), Corners, 3.0f);
+		r.Draw(vec4(0,0,0,0.75f), 3.0f, Corners);
 		r.Margin(4.0f, &r);
 
 		if(s_Popups.m_pfnFunc(this, r))
 			m_PopupActive = false;
 
-		if(Input()->KeyPress(KEY_ESCAPE))
+		if(UI()->KeyPress(KEY_ESCAPE))
 			m_PopupActive = false;
 	}
 }

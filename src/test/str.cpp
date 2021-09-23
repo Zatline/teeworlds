@@ -100,3 +100,60 @@ TEST(StrFormat, Positional)
 	str_format(aBuf, sizeof(aBuf), "%1$s %1$s %2$d %1$s %2$d", "str", 1);
 	EXPECT_STREQ(aBuf, "str str 1 str 1");
 }
+
+TEST(Str, PathUnsafe)
+{
+	EXPECT_TRUE(str_path_unsafe(".."));
+	EXPECT_TRUE(str_path_unsafe("/.."));
+	EXPECT_TRUE(str_path_unsafe("/../"));
+	EXPECT_TRUE(str_path_unsafe("../"));
+
+	EXPECT_TRUE(str_path_unsafe("/../foobar"));
+	EXPECT_TRUE(str_path_unsafe("../foobar"));
+	EXPECT_TRUE(str_path_unsafe("foobar/../foobar"));
+	EXPECT_TRUE(str_path_unsafe("foobar/.."));
+	EXPECT_TRUE(str_path_unsafe("foobar/../"));
+
+	EXPECT_FALSE(str_path_unsafe("abc"));
+	EXPECT_FALSE(str_path_unsafe("abc/"));
+	EXPECT_FALSE(str_path_unsafe("abc/def"));
+	EXPECT_FALSE(str_path_unsafe("abc/def.txt"));
+	EXPECT_FALSE(str_path_unsafe("abc\\"));
+	EXPECT_FALSE(str_path_unsafe("abc\\def"));
+	EXPECT_FALSE(str_path_unsafe("abc\\def.txt"));
+	EXPECT_FALSE(str_path_unsafe("abc/def\\ghi.txt"));
+	EXPECT_FALSE(str_path_unsafe("любовь"));
+}
+
+TEST(Str, Utf8Stats)
+{
+	int Size, Count;
+
+	str_utf8_stats("abc", 4, &Size, &Count);
+	EXPECT_EQ(Size, 3);
+	EXPECT_EQ(Count, 3);
+
+	str_utf8_stats("abc", 2, &Size, &Count);
+	EXPECT_EQ(Size, 1);
+	EXPECT_EQ(Count, 1);
+
+	str_utf8_stats("", 1, &Size, &Count);
+	EXPECT_EQ(Size, 0);
+	EXPECT_EQ(Count, 0);
+
+	str_utf8_stats("abcde", 6, &Size, &Count);
+	EXPECT_EQ(Size, 5);
+	EXPECT_EQ(Count, 5);
+
+	str_utf8_stats("любовь", 13, &Size, &Count);
+	EXPECT_EQ(Size, 12);
+	EXPECT_EQ(Count, 6);
+
+	str_utf8_stats("abc愛", 7, &Size, &Count);
+	EXPECT_EQ(Size, 6);
+	EXPECT_EQ(Count, 4);
+
+	str_utf8_stats("abc愛", 6, &Size, &Count);
+	EXPECT_EQ(Size, 3);
+	EXPECT_EQ(Count, 3);
+}

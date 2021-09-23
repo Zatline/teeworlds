@@ -1,9 +1,11 @@
+/* (c) Magnus Auvinen. See licence.txt in the root of the distribution for more information. */
+/* If you are missing that file, acquire a complete release at teeworlds.com.                */
 #ifndef ENGINE_KEYS_H
 #define ENGINE_KEYS_H
 #if defined(CONF_FAMILY_WINDOWS)
    #undef KEY_EXECUTE
 #endif
-/* AUTO GENERATED! DO NOT EDIT MANUALLY! */
+
 enum
 {
 	KEY_FIRST = 0,
@@ -277,7 +279,7 @@ enum
 	KEY_LAST,
 };
 
-inline int KeyToKeycode(int Key) { return (Key>=0x80) ? (Key-0x80)|(1<<30) : Key; };
-inline int KeycodeToKey(int Keycode) { return (Keycode&(1<<30)) ? Keycode-(1<<30)+0x80 : Keycode; };
+inline int KeyToKeycode(int Key) { return (Key>=0x80) ? (Key-0x80)|(1<<30) : Key; }
+inline int KeycodeToKey(int Keycode) { return (Keycode&(1<<30)) ? Keycode-(1<<30)+0x80 : Keycode; }
 
 #endif

@@ -31,9 +31,6 @@ extern "C" {
 		test - Result of the test.
 		msg - Message that should be printed if the test fails.
 
-	Remarks:
-		Does nothing in release version of the library.
-
 	See Also:
 		<dbg_break>
 */
@@ -52,9 +49,6 @@ void dbg_assert_imp(const char *filename, int line, int test, const char *msg);
 	Function: dbg_break
 		Breaks into the debugger.
 
-	Remarks:
-		Does nothing in release version of the library.
-
 	See Also:
 		<dbg_assert>
 */
@@ -68,9 +62,6 @@ void dbg_break();
 	Parameters:
 		sys - A string that describes what system the message belongs to
 		fmt - A printf styled format string.
-
-	Remarks:
-		Does nothing in release version of the library.
 
 	See Also:
 		<dbg_assert>
@@ -86,30 +77,22 @@ GNUC_ATTRIBUTE((format(printf, 2, 3)));
 
 	Parameters:
 		size - Size of the needed block.
-		alignment - Alignment for the block.
 
 	Returns:
 		Returns a pointer to the newly allocated block. Returns a
 		null pointer if the memory couldn't be allocated.
 
 	Remarks:
-		- Passing 0 to size will allocated the smallest amount possible
-		and return a unique pointer.
+		- The behavior when passing 0 as size is unspecified.
 
 	See Also:
 		<mem_free>
 */
-void *mem_alloc_debug(const char *filename, int line, unsigned size, unsigned alignment);
-#define mem_alloc(s,a) mem_alloc_debug(__FILE__, __LINE__, (s), (a))
+void *mem_alloc(unsigned size);
 
 /*
 	Function: mem_free
 		Frees a block allocated through <mem_alloc>.
-
-	Remarks:
-		- In the debug version of the library the function will assert if
-		a non-valid block is passed, like a null pointer or a block that
-		isn't allocated.
 
 	See Also:
 		<mem_alloc>
@@ -178,6 +161,20 @@ void mem_zero(void *block, unsigned size);
 */
 int mem_comp(const void *a, const void *b, int size);
 
+/*
+	Function: mem_has_null
+		Checks whether a block of memory contains null bytes.
+
+	Parameters:
+		block - Pointer to the block to check for nulls.
+		size - Size of the block.
+
+	Returns:
+		1 - The block has a null byte.
+		0 - The block does not have a null byte.
+*/
+int mem_has_null(const void *block, unsigned size);
+
 /* Group: File IO */
 enum {
 	IOFLAG_READ = 1,
@@ -186,7 +183,9 @@ enum {
 
 	IOSEEK_START = 0,
 	IOSEEK_CUR = 1,
-	IOSEEK_END = 2
+	IOSEEK_END = 2,
+
+	IO_MAX_PATH_LENGTH = 512,
 };
 
 typedef struct IOINTERNAL *IOHANDLE;
@@ -211,7 +210,7 @@ IOHANDLE io_open(const char *filename, int flags);
 
 	Parameters:
 		io - Handle to the file to read data from.
-		buffer - Pointer to the buffer that will recive the data.
+		buffer - Pointer to the buffer that will receive the data.
 		size - Number of bytes to read from the file.
 
 	Returns:
@@ -219,6 +218,40 @@ IOHANDLE io_open(const char *filename, int flags);
 
 */
 unsigned io_read(IOHANDLE io, void *buffer, unsigned size);
+
+/*
+	Function: io_read_all
+		Reads the rest of the file into a buffer.
+
+	Parameters:
+		io - Handle to the file to read data from.
+		result - Receives the file's remaining contents.
+		result_len - Receives the file's remaining length.
+
+	Remarks:
+		- Does NOT guarantee that there are no internal null bytes.
+		- Guarantees that result will contain zero-termination.
+		- The result must be freed after it has been used.
+*/
+void io_read_all(IOHANDLE io, void **result, unsigned *result_len);
+
+/*
+	Function: io_read_all_str
+		Reads the rest of the file into a zero-terminated buffer with
+		no internal null bytes.
+
+	Parameters:
+		io - Handle to the file to read data from.
+
+	Returns:
+		The file's remaining contents or null on failure.
+
+	Remarks:
+		- Guarantees that there are no internal null bytes.
+		- Guarantees that result will contain zero-termination.
+		- The result must be freed after it has been used.
+*/
+char *io_read_all_str(IOHANDLE io);
 
 /*
 	Function: io_unread_byte
@@ -480,7 +513,7 @@ int64 time_freq();
 
 /*
 	Function: time_timestamp
-		Retrives the current time as a UNIX timestamp
+		Retrieves the current time as a UNIX timestamp
 
 	Returns:
 		The time as a UNIX timestamp
@@ -489,12 +522,30 @@ int time_timestamp();
 
 /*
 	Function: time_houroftheday
-		Retrives the hours since midnight (0..23)
+		Retrieves the hours since midnight (0..23)
 
 	Returns:
 		The current hour of the day
 */
 int time_houroftheday();
+
+
+enum
+{
+	SEASON_SPRING = 0,
+	SEASON_SUMMER,
+	SEASON_AUTUMN,
+	SEASON_WINTER
+};
+
+/*
+	Function: time_season
+		Retrieves the current season of the year.
+
+	Returns:
+		one of the SEASON_* enum literals
+*/
+int time_season();
 
 /*
 	Function: time_isxmasday
@@ -528,6 +579,9 @@ enum
 {
 	NETADDR_MAXSTRSIZE = 1+(8*4+7)+1+1+5+1, // [XXXX:XXXX:XXXX:XXXX:XXXX:XXXX:XXXX:XXXX]:XXXXX
 
+	NETADDR_SIZE_IPV4 = 4,
+	NETADDR_SIZE_IPV6 = 16,
+
 	NETTYPE_INVALID = 0,
 	NETTYPE_IPV4 = 1,
 	NETTYPE_IPV6 = 2,
@@ -538,13 +592,22 @@ enum
 typedef struct
 {
 	unsigned int type;
-	unsigned char ip[16];
+	unsigned char ip[NETADDR_SIZE_IPV6];
 	unsigned short port;
+	unsigned short reserved;
 } NETADDR;
 
 /*
+	Function: net_invalidate_socket
+		Invalidates a socket.
+
+	Remarks:
+		You should close the socket before invalidating it.
+*/
+void net_invalidate_socket(NETSOCKET *socket);
+/*
 	Function: net_init
-		Initiates network functionallity.
+		Initiates network functionality.
 
 	Returns:
 		Returns 0 on success,
@@ -572,13 +635,13 @@ int net_host_lookup(const char *hostname, NETADDR *addr, int types);
 	Parameters:
 		a - Address to compare
 		b - Address to compare to.
+		check_port - compares port or not
 
 	Returns:
-		<0 - Address a is lesser then address b
 		0 - Address a is equal to address b
-		>0 - Address a is greater then address b
+		-1 - Address a differs from address b
 */
-int net_addr_comp(const NETADDR *a, const NETADDR *b);
+int net_addr_comp(const NETADDR *a, const NETADDR *b, int check_port);
 
 /*
 	Function: net_addr_str
@@ -643,13 +706,13 @@ int net_udp_send(NETSOCKET sock, const NETADDR *addr, const void *data, int size
 
 /*
 	Function: net_udp_recv
-		Recives a packet over an UDP socket.
+		Receives a packet over an UDP socket.
 
 	Parameters:
 		sock - Socket to use.
-		addr - Pointer to an NETADDR that will recive the address.
-		data - Pointer to a buffer that will recive the data.
-		maxsize - Maximum size to recive.
+		addr - Pointer to an NETADDR that will receive the address.
+		data - Pointer to a buffer that will receive the data.
+		maxsize - Maximum size to receive.
 
 	Returns:
 		On success it returns the number of bytes recived. Returns -1
@@ -683,6 +746,21 @@ int net_udp_close(NETSOCKET sock);
 		On success it returns an handle to the socket. On failure it returns NETSOCKET_INVALID.
 */
 NETSOCKET net_tcp_create(NETADDR bindaddr);
+
+/*
+	Function: net_tcp_set_linger
+		Sets behaviour when closing the socket.
+
+	Parameters:
+		sock - Socket to use.
+		state - What to do when closing the socket.
+				1 abort connection on close.
+				0 shutdown the connection properly on close.
+
+	Returns:
+		Returns 0 on success.
+*/
+int net_tcp_set_linger(NETSOCKET sock, int state);
 
 /*
 	Function: net_tcp_listen
@@ -830,18 +908,18 @@ int str_length(const char *str);
 
 /*
 	Function: str_format
-		Performs printf formating into a buffer.
+		Performs printf formatting into a buffer.
 
 	Parameters:
-		buffer - Pointer to the buffer to recive the formated string.
+		buffer - Pointer to the buffer to receive the formatted string.
 		buffer_size - Size of the buffer.
-		format - printf formating string.
-		... - Parameters for the formating.
+		format - printf formatting string.
+		... - Parameters for the formatting.
 
 	Remarks:
-		- See the C manual for syntax for the printf formating string.
-		- The strings are treated as zero-terminated strings.
-		- Garantees that dst string will contain zero-termination.
+		- See the C manual for syntax for the printf formatting string.
+		- The strings are treated as zero-termineted strings.
+		- Guarantees that dst string will contain zero-termination.
 */
 void str_format(char *buffer, int buffer_size, const char *format, ...)
 GNUC_ATTRIBUTE((format(printf, 3, 4)));
@@ -894,22 +972,22 @@ void str_sanitize(char *str);
 	Remarks:
 		- The strings are treated as zero-terminated strings.
 */
-char* str_sanitize_filename(char* aName);
+char *str_sanitize_filename(char *name);
 
 /*
-	Function: str_check_pathname
+	Function: str_path_unsafe
 		Check if the string contains '..' (parent directory) paths.
 
 	Parameters:
 		str - String to check.
 
 	Returns:
-		Returns 0 if the path is valid, -1 otherwise.
+		Returns 0 if the path is safe, -1 otherwise.
 
 	Remarks:
 		- The strings are treated as zero-terminated strings.
 */
-int str_check_pathname(const char* str);
+int str_path_unsafe(const char *str);
 
 /*
 	Function: str_clean_whitespaces
@@ -972,6 +1050,12 @@ const char *str_skip_to_whitespace_const(const char *str);
 		- The strings are treated as zero-terminated strings.
 */
 char *str_skip_whitespaces(char *str);
+
+/*
+	Function: str_skip_whitespaces_const
+		See str_skip_whitespaces.
+*/
+const char *str_skip_whitespaces_const(const char *str);
 
 /*
 	Function: str_comp_nocase
@@ -1182,9 +1266,24 @@ const char *str_find(const char *haystack, const char *needle);
 		data - Size of the data
 
 	Remarks:
-		- The desination buffer will be zero-terminated
+		- The destination buffer will be zero-terminated
 */
 void str_hex(char *dst, int dst_size, const void *data, int data_size);
+
+/*
+	Function: str_is_number
+		Check if the string contains only digits.
+
+	Parameters:
+		str - String to check.
+
+	Returns:
+		Returns 0 if it's a number, -1 otherwise.
+
+	Remarks:
+		- The strings are treated as zero-terminated strings.
+*/
+int str_is_number(const char *pstr);
 
 /*
 	Function: str_timestamp
@@ -1202,6 +1301,19 @@ void str_timestamp_format(char *buffer, int buffer_size, const char *format)
 GNUC_ATTRIBUTE((format(strftime, 3, 0)));
 void str_timestamp_ex(time_t time, char *buffer, int buffer_size, const char *format)
 GNUC_ATTRIBUTE((format(strftime, 4, 0)));
+
+/*
+	Function: str_span
+		Returns the length of the minimum initial segment that doesn't contain characters in set
+
+	Parameters:
+		str - String to search in
+		set - Set of characters to stop on
+
+	Remarks:
+		- Also stops on '\0'
+*/
+int str_span(const char *str, const char *set);
 
 #define FORMAT_TIME "%H:%M:%S"
 #define FORMAT_SPACE "%Y-%m-%d %H:%M:%S"
@@ -1221,6 +1333,28 @@ GNUC_ATTRIBUTE((format(strftime, 4, 0)));
 */
 typedef int (*FS_LISTDIR_CALLBACK)(const char *name, int is_dir, int dir_type, void *user);
 void fs_listdir(const char *dir, FS_LISTDIR_CALLBACK cb, int type, void *user);
+
+typedef struct
+{
+	const char* m_pName;
+	time_t m_TimeCreated; // seconds since UNIX Epoch
+	time_t m_TimeModified; // seconds since UNIX Epoch
+} CFsFileInfo;
+
+/* Group: Filesystem */
+
+/*
+	Function: fs_listdir_fileinfo
+		Lists the files in a directory and gets additional file information
+
+	Parameters:
+		dir - Directory to list
+		cb - Callback function to call for each entry
+		type - Type of the directory
+		user - Pointer to give to the callback
+*/
+typedef int (*FS_LISTDIR_CALLBACK_FILEINFO)(const CFsFileInfo* info, int is_dir, int dir_type, void *user);
+void fs_listdir_fileinfo(const char *dir, FS_LISTDIR_CALLBACK_FILEINFO cb, int type, void *user);
 
 /*
 	Function: fs_makedir
@@ -1273,6 +1407,12 @@ int fs_storage_path(const char *appname, char *path, int max);
 		Returns 1 on success, 0 on failure.
 */
 int fs_is_dir(const char *path);
+
+/*
+	Function: fs_getmtime
+		Gets the modification time of a file
+*/
+time_t fs_getmtime(const char *path);
 
 /*
 	Function: fs_chdir
@@ -1337,6 +1477,61 @@ int fs_remove(const char *filename);
 		- The strings are treated as zero-terminated strings.
 */
 int fs_rename(const char *oldname, const char *newname);
+
+/*
+	Function: fs_read
+		Reads a whole file into memory and returns its contents.
+
+	Parameters:
+		name - The filename to read.
+		result - Receives the file's contents.
+		result_len - Receives the file's length.
+
+	Returns:
+		Returns 0 on success, 1 on failure.
+
+	Remarks:
+		- Does NOT guarantee that there are no internal null bytes.
+		- Guarantees that result will contain zero-termination.
+		- The result must be freed after it has been used.
+*/
+int fs_read(const char *name, void **result, unsigned *result_len);
+
+/*
+	Function: fs_read_str
+		Reads a whole file into memory and returns its contents,
+		guaranteeing a null-terminated string with no internal null
+		bytes.
+
+	Parameters:
+		name - The filename to read.
+
+	Returns:
+		Returns the file's contents on success, null on failure.
+
+	Remarks:
+		- Guarantees that there are no internal null bytes.
+		- Guarantees that result will contain zero-termination.
+		- The result must be freed after it has been used.
+*/
+char *fs_read_str(const char *name);
+
+/*
+	Function: fs_file_time
+		Gets the creation and the last modification date of a file.
+
+	Parameters:
+		name - The filename.
+		created - Pointer to time_t
+		modified - Pointer to time_t
+
+	Returns:
+		0 on success non-zero on failure
+
+	Remarks:
+		- Returned time is in seconds since UNIX Epoch
+*/
+int fs_file_time(const char *name, time_t *created, time_t *modified);
 
 /*
 	Group: Undocumented
@@ -1413,6 +1608,10 @@ int str_isspace(char c);
 char str_uppercase(char c);
 unsigned str_quickhash(const char *str);
 
+enum
+{
+	UTF8_BYTE_LENGTH = 4
+};
 /*
 	Function: str_utf8_is_whitespace
 		Check if the unicode is an utf8 whitespace.
@@ -1532,6 +1731,38 @@ int str_utf8_encode(char *ptr, int chr);
 int str_utf8_check(const char *str);
 
 /*
+	Function: str_utf8_copy_num
+		Copies a number of utf8 characters from one string to another.
+
+	Parameters:
+		dst - Pointer to a buffer that shall receive the string.
+		src - String to be copied.
+		dst_size - Size of the buffer dst.
+		num - maximum number of utf8 characters to be copied.
+
+	Remarks:
+		- The strings are treated as zero-terminated strings.
+		- Garantees that dst string will contain zero-termination.
+*/
+void str_utf8_copy_num(char *dst, const char *src, int dst_size, int num);
+
+/*
+	Function: str_utf8_stats
+		Determines the byte size and utf8 character count of a string.
+
+	Parameters:
+		str - Pointer to the string.
+		max_size - Maximum number of bytes to count.
+		size - Pointer to store size (number of non-zero bytes) of the string.
+		count - Pointer to store count of utf8 characters of the string.
+
+	Remarks:
+		- Assumes nothing about the encoding of the string.
+		  It's the users responsibility to make sure the bounds are aligned.
+*/
+void str_utf8_stats(const char *str, int max_size, int *size, int *count);
+
+/*
 	Function: secure_random_init
 		Initializes the secure random module.
 		You *MUST* check the return value of this function.
@@ -1560,6 +1791,29 @@ void secure_random_fill(void *bytes, unsigned length);
 		The process ID of the current process.
 */
 int pid();
+
+/*
+	Function: bytes_be_to_uint
+		Packs 4 big endian bytes into an unsigned
+
+	Returns:
+		The packed unsigned
+
+	Remarks:
+		- Assumes the passed array is 4 bytes
+		- Assumes unsigned is 4 bytes
+*/
+unsigned bytes_be_to_uint(const unsigned char *bytes);
+
+/*
+	Function: uint_to_bytes_be
+		Packs an unsigned into 4 big endian bytes
+
+	Remarks:
+		- Assumes the passed array is 4 bytes
+		- Assumes unsigned is 4 bytes
+*/
+void uint_to_bytes_be(unsigned char *bytes, unsigned value);
 
 #ifdef __cplusplus
 }

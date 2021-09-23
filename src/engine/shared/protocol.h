@@ -6,7 +6,7 @@
 #include <base/system.h>
 
 /*
-	Connection diagram - How the initilization works.
+	Connection diagram - How the initialization works.
 
 	Client -> INFO -> Server
 		Contains version info, name, and some other info.
@@ -20,7 +20,7 @@
 		modc_connected is called on the client and
 		mods_connected is called on the server.
 		The client should call client_entergame when the
-		mod has done it's initilization.
+		mod has done it's initialization.
 
 	Client -> ENTERGAME -> Server
 		Tells the server to start sending snapshots.
@@ -91,7 +91,11 @@ enum
 	MAX_SNAPSHOT_PACKSIZE=900,
 
 	MAX_NAME_LENGTH=16,
+	MAX_NAME_ARRAY_SIZE=MAX_NAME_LENGTH*UTF8_BYTE_LENGTH+1,
 	MAX_CLAN_LENGTH=12,
+	MAX_CLAN_ARRAY_SIZE=MAX_CLAN_LENGTH*UTF8_BYTE_LENGTH+1,
+	MAX_SKIN_LENGTH=24,
+	MAX_SKIN_ARRAY_SIZE=MAX_SKIN_LENGTH*UTF8_BYTE_LENGTH+1,
 
 	// message packing
 	MSGFLAG_VITAL=1,

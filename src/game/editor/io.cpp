@@ -66,9 +66,9 @@ int CEditorMap::Save(class IStorage *pStorage, const char *pFileName)
 	{
 		CEditorImage *pImg = m_lImages[i];
 
-		// analyse the image for when saving (should be done when we load the image)
+		// analyze the image for when saving (should be done when we load the image)
 		// TODO!
-		pImg->AnalyseTileFlags();
+		pImg->AnalyzeTileFlags();
 
 		CMapItemImage Item;
 		Item.m_Version = CMapItemImage::CURRENT_VERSION;
@@ -183,7 +183,7 @@ int CEditorMap::Save(class IStorage *pStorage, const char *pFileName)
 
 	// check for bezier curve envelopes, otherwise use older, smaller envelope points
 	int Version = CMapItemEnvelope_v2::CURRENT_VERSION;
-	int Size = sizeof(CEnvPoint_v1);	
+	int Size = sizeof(CEnvPoint_v1);
 	for(int e = 0; e < m_lEnvelopes.size(); e++)
 	{
 		for(int p = 0; p < m_lEnvelopes[e]->m_lPoints.size(); p++)
@@ -215,7 +215,7 @@ int CEditorMap::Save(class IStorage *pStorage, const char *pFileName)
 
 	// save points
 	int TotalSize = Size * PointCount;
-	unsigned char *pPoints = (unsigned char *)mem_alloc(TotalSize, 1);
+	unsigned char *pPoints = (unsigned char *)mem_alloc(TotalSize);
 	int Offset = 0;
 	for(int e = 0; e < m_lEnvelopes.size(); e++)
 	{
@@ -305,7 +305,7 @@ int CEditorMap::Load(class IStorage *pStorage, const char *pFileName, int Storag
 
 				if(pItem->m_External || (pItem->m_Version > 1 && pItem->m_Format != CImageInfo::FORMAT_RGB && pItem->m_Format != CImageInfo::FORMAT_RGBA))
 				{
-					char aBuf[256];
+					char aBuf[IO_MAX_PATH_LENGTH];
 					str_format(aBuf, sizeof(aBuf),"mapres/%s.png", pName);
 
 					// load external
@@ -326,9 +326,10 @@ int CEditorMap::Load(class IStorage *pStorage, const char *pFileName, int Storag
 					int PixelSize = pImg->m_Format == CImageInfo::FORMAT_RGB ? 3 : 4;
 
 					// copy image data
+					int DataSize = pImg->m_Width * pImg->m_Height * PixelSize;
 					void *pData = DataFile.GetData(pItem->m_ImageData);
-					pImg->m_pData = mem_alloc(pImg->m_Width*pImg->m_Height*PixelSize, 1);
-					mem_copy(pImg->m_pData, pData, pImg->m_Width*pImg->m_Height*PixelSize);
+					pImg->m_pData = mem_alloc(DataSize);
+					mem_copy(pImg->m_pData, pData, DataSize);
 					pImg->m_Texture = m_pEditor->Graphics()->LoadTextureRaw(pImg->m_Width, pImg->m_Height, pImg->m_Format, pImg->m_pData, CImageInfo::FORMAT_AUTO, IGraphics::TEXLOAD_MULTI_DIMENSION);
 				}
 
@@ -423,7 +424,7 @@ int CEditorMap::Load(class IStorage *pStorage, const char *pFileName, int Storag
 							pTiles->ExtractTiles((CTile *)pData);
 						else
 							mem_copy(pTiles->m_pTiles, pData, pTiles->m_Width*pTiles->m_Height*sizeof(CTile));
-						
+
 
 						if(pTiles->m_Game && pTilemapItem->m_Version == MakeVersion(1, *pTilemapItem))
 						{

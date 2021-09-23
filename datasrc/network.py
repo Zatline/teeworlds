@@ -1,6 +1,6 @@
 from datatypes import *
 
-Pickups = Enum("PICKUP", ["HEALTH", "ARMOR", "GRENADE", "SHOTGUN", "LASER", "NINJA"])
+Pickups = Enum("PICKUP", ["HEALTH", "ARMOR", "GRENADE", "SHOTGUN", "LASER", "NINJA", "GUN", "HAMMER"])
 Emotes = Enum("EMOTE", ["NORMAL", "PAIN", "HAPPY", "SURPRISE", "ANGRY", "BLINK"])
 Emoticons = Enum("EMOTICON", ["OOP", "EXCLAMATION", "HEARTS", "DROP", "DOTDOT", "MUSIC", "SORRY", "GHOST", "SUSHI", "SPLATTEE", "DEVILTEE", "ZOMG", "ZZZ", "WTF", "EYES", "QUESTION"])
 Votes = Enum("VOTE", ["UNKNOWN", "START_OP", "START_KICK", "START_SPEC", "END_ABORT", "END_PASS", "END_FAIL"]) # todo 0.8: add RUN_OP, RUN_KICK, RUN_SPEC; rem UNKNOWN
@@ -13,11 +13,11 @@ CoreEventFlags = Flags("COREEVENTFLAG", ["GROUND_JUMP", "AIR_JUMP", "HOOK_ATTACH
 RaceFlags = Flags("RACEFLAG", ["HIDE_KILLMSG", "FINISHMSG_AS_CHAT", "KEEP_WANTED_WEAPON"])
 
 GameMsgIDs = Enum("GAMEMSG", ["TEAM_SWAP", "SPEC_INVALIDID", "TEAM_SHUFFLE", "TEAM_BALANCE", "CTF_DROP", "CTF_RETURN",
-							
+
 							"TEAM_ALL", "TEAM_BALANCE_VICTIM", "CTF_GRAB",
-							
+
 							"CTF_CAPTURE",
-							
+
 							"GAME_PAUSED"]) # todo 0.8: sort (1 para)
 
 
@@ -54,6 +54,10 @@ enum
 	SKINPART_FEET,
 	SKINPART_EYES,
 	NUM_SKINPARTS,
+
+	VOTE_CHOICE_NO = -1,
+	VOTE_CHOICE_PASS = 0,
+	VOTE_CHOICE_YES = 1
 };
 '''
 
@@ -92,6 +96,8 @@ Objects = [
 
 		NetFlag("m_PlayerFlags", PlayerFlags),
 
+		# 0 means "no wanted weapon", `1+weapon` means that `weapon` is wanted,
+		# and ninja is not a valid wanted weapon.
 		NetIntRange("m_WantedWeapon", 0, 'NUM_WEAPONS-1'),
 		NetIntAny("m_NextWeapon"),
 		NetIntAny("m_PrevWeapon"),
@@ -159,7 +165,7 @@ Objects = [
 		NetIntRange("m_Direction", -1, 1),
 
 		NetIntRange("m_Jumped", 0, 3),
-		NetIntRange("m_HookedPlayer", 0, 'MAX_CLIENTS-1'),
+		NetIntRange("m_HookedPlayer", -1, 'MAX_CLIENTS-1'),
 		NetIntRange("m_HookState", -1, 5),
 		NetTick("m_HookTick"),
 
@@ -210,7 +216,7 @@ Objects = [
 
 	NetObject("De_GameInfo", [
 		NetFlag("m_GameFlags", GameFlags),
-		
+
 		NetIntRange("m_ScoreLimit", 0, 'max_int'),
 		NetIntRange("m_TimeLimit", 0, 'max_int'),
 
@@ -360,7 +366,7 @@ Messages = [
 
 	NetMessage("Sv_GameInfo", [
 		NetFlag("m_GameFlags", GameFlags),
-		
+
 		NetIntRange("m_ScoreLimit", 0, 'max_int'),
 		NetIntRange("m_TimeLimit", 0, 'max_int'),
 
@@ -423,7 +429,7 @@ Messages = [
 	]),
 
 	NetMessage("Cl_Vote", [
-		NetIntRange("m_Vote", -1, 1),
+		NetIntRange("m_Vote", 'VOTE_CHOICE_NO', 'VOTE_CHOICE_YES'),
 	]),
 
 	NetMessage("Cl_CallVote", [
@@ -452,10 +458,27 @@ Messages = [
 		NetIntRange("m_ClientID", 0, 'MAX_CLIENTS-1'),
 		NetIntRange("m_Time", -1, 'max_int'),
 		NetIntAny("m_Diff"),
-		NetBool("m_NewRecord"),
+		NetBool("m_RecordPersonal"),
+		NetBool("m_RecordServer", default=False),
 	]),
 
 	NetMessage("Sv_Checkpoint", [
 		NetIntAny("m_Diff"),
 	]),
+
+	NetMessage("Sv_CommandInfo", [
+			NetStringStrict("m_Name"),
+			NetStringStrict("m_ArgsFormat"),
+			NetStringStrict("m_HelpText")
+	]),
+
+	NetMessage("Sv_CommandInfoRemove", [
+			NetStringStrict("m_Name")
+	]),
+
+	NetMessage("Cl_Command", [
+			NetStringStrict("m_Name"),
+			NetStringStrict("m_Arguments")
+	]),
+
 ]

@@ -43,7 +43,6 @@ class CVideoMode
 {
 public:
 	int m_Width, m_Height;
-	int m_Red, m_Green, m_Blue;
 
 	bool operator<(const CVideoMode &Other) { return Other.m_Width < m_Width; }
 };
@@ -56,6 +55,7 @@ protected:
 	int m_ScreenHeight;
 	int m_DesktopScreenWidth;
 	int m_DesktopScreenHeight;
+	float m_ScreenHiDPIScale;
 public:
 	/* Constants: Texture Loading Flags
 		TEXLOAD_NORESAMPLE - Prevents the texture from any resampling
@@ -98,6 +98,7 @@ public:
 	int ScreenWidth() const { return m_ScreenWidth; }
 	int ScreenHeight() const { return m_ScreenHeight; }
 	float ScreenAspect() const { return (float)ScreenWidth()/(float)ScreenHeight(); }
+	float ScreenHiDPIScale() const { return m_ScreenHiDPIScale; }
 	int DesktopWidth() const { return m_DesktopScreenWidth; }
 	int DesktopHeight() const { return m_DesktopScreenHeight; }
 	float DesktopAspect() const { return m_DesktopScreenWidth/(float)m_DesktopScreenHeight; }
@@ -172,7 +173,8 @@ public:
 	};
 	virtual void SetColorVertex(const CColorVertex *pArray, int Num) = 0;
 	virtual void SetColor(float r, float g, float b, float a) = 0;
-	virtual void SetColor4(vec4 TopLeft, vec4 TopRight, vec4 BottomLeft, vec4 BottomRight) = 0;
+	inline void SetColor(const vec4 &Color) { SetColor(Color.r, Color.g, Color.b, Color.a); }
+	virtual void SetColor4(const vec4 &TopLeft, const vec4 &TopRight, const vec4 &BottomLeft, const vec4 &BottomRight) = 0;
 
 	virtual void ReadBackbuffer(unsigned char **ppPixels, int x, int y, int w, int h) = 0;
 	virtual void TakeScreenshot(const char *pFilename) = 0;

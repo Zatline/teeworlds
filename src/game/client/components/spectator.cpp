@@ -9,6 +9,7 @@
 #include <generated/protocol.h>
 
 #include <game/client/animstate.h>
+#include <game/client/localization.h>
 #include <game/client/render.h>
 
 #include "spectator.h"
@@ -123,18 +124,18 @@ CSpectator::CSpectator()
 void CSpectator::OnConsoleInit()
 {
 	Console()->Register("+spectate", "", CFGFLAG_CLIENT, ConKeySpectator, this, "Open spectator mode selector");
-	Console()->Register("spectate", "ii", CFGFLAG_CLIENT, ConSpectate, this, "Switch spectator mode");
+	Console()->Register("spectate", "i[mode] i[target]", CFGFLAG_CLIENT, ConSpectate, this, "Switch spectator mode");
 	Console()->Register("spectate_next", "", CFGFLAG_CLIENT, ConSpectateNext, this, "Spectate the next player");
 	Console()->Register("spectate_previous", "", CFGFLAG_CLIENT, ConSpectatePrevious, this, "Spectate the previous player");
 }
 
-bool CSpectator::OnMouseMove(float x, float y)
+bool CSpectator::OnCursorMove(float x, float y, int CursorType)
 {
 	if(!m_Active)
 		return false;
 
-	UI()->ConvertMouseMove(&x, &y);
-	m_SelectorMouse += vec2(x,y);
+	UI()->ConvertCursorMove(&x, &y, CursorType);
+	m_SelectorMouse += vec2(x, y);
 	return true;
 }
 
@@ -191,14 +192,14 @@ void CSpectator::OnRender()
 		ScaleX = 1.5f;
 
 	// draw background
-	float Width = 400*3.0f*Graphics()->ScreenAspect();
-	float Height = 400*3.0f;
+	const float Height = 400.0f * 3.0f;
+	const float Width = Height * Graphics()->ScreenAspect();
 
 	Graphics()->MapScreen(0, 0, Width, Height);
 
 	CUIRect Rect = {Width/2.0f-300.0f*ScaleX, Height/2.0f-300.0f, 600.0f*ScaleX, 600.0f};
 	Graphics()->BlendNormal();
-	RenderTools()->DrawRoundRect(&Rect, vec4(0.0f, 0.0f, 0.0f, 0.3f), 20.0f);
+	Rect.Draw(vec4(0.0f, 0.0f, 0.0f, 0.3f), 20.0f);
 
 	// clamp mouse position to selector area
 	m_SelectorMouse.x = clamp(m_SelectorMouse.x, -300.0f*ScaleX + 20.0f, 300.0f*ScaleX - 20.0f);
@@ -218,7 +219,7 @@ void CSpectator::OnRender()
 			Rect.y = Height/2.0f-280.0f;
 			Rect.w = 270.0f;
 			Rect.h = 60.0f;
-			RenderTools()->DrawRoundRect(&Rect, vec4(1.0f, 1.0f, 1.0f, 0.25f), 20.0f);
+			Rect.Draw(vec4(1.0f, 1.0f, 1.0f, 0.25f), 20.0f);
 		}
 
 		if(m_SelectorMouse.x >= -280.0f && m_SelectorMouse.x <= -10.0f &&
@@ -228,7 +229,11 @@ void CSpectator::OnRender()
 			Selected = true;
 		}
 		TextRender()->TextColor(1.0f, 1.0f, 1.0f, Selected?1.0f:0.5f);
-		TextRender()->Text(0, Width/2.0f-240.0f, Height/2.0f-265.0f, FontSize, Localize("Free-View"), -1.0f);
+		static CTextCursor s_FreeViewLabelCursor;
+		s_FreeViewLabelCursor.m_FontSize = FontSize;
+		s_FreeViewLabelCursor.MoveTo(Width/2.0f-240.0f, Height/2.0f-265.0f);
+		s_FreeViewLabelCursor.Reset(g_Localization.Version());
+		TextRender()->TextOutlined(&s_FreeViewLabelCursor, Localize("Free-View"), -1);
 	}
 
 	//
@@ -243,7 +248,7 @@ void CSpectator::OnRender()
 				Rect.y = Height/2.0f+y-10.0f;
 				Rect.w = 120.0f;
 				Rect.h = 60.0f;
-				RenderTools()->DrawRoundRect(&Rect, vec4(1.0f, 1.0f, 1.0f, 0.25f), 20.0f);
+				Rect.Draw(vec4(1.0f, 1.0f, 1.0f, 0.25f), 20.0f);
 			}
 
 			Selected = false;
@@ -277,8 +282,9 @@ void CSpectator::OnRender()
 	for(int i = 0, Count = 0; i < MAX_CLIENTS; ++i)
 	{
 		if(!m_pClient->m_Snap.m_paPlayerInfos[i] || m_pClient->m_aClients[i].m_Team == TEAM_SPECTATORS ||
-			(m_pClient->m_aClients[m_pClient->m_LocalClientID].m_Team != TEAM_SPECTATORS && (m_pClient->m_Snap.m_paPlayerInfos[i]->m_PlayerFlags&PLAYERFLAG_DEAD ||
-			m_pClient->m_aClients[m_pClient->m_LocalClientID].m_Team != m_pClient->m_aClients[i].m_Team || i == m_pClient->m_LocalClientID)))
+			m_pClient->m_Snap.m_paPlayerInfos[i]->m_PlayerFlags&PLAYERFLAG_DEAD ||
+			(m_pClient->m_aClients[m_pClient->m_LocalClientID].m_Team != TEAM_SPECTATORS &&
+			(m_pClient->m_aClients[m_pClient->m_LocalClientID].m_Team != m_pClient->m_aClients[i].m_Team || i == m_pClient->m_LocalClientID)))
 			continue;
 
 		if(Count != 0 && Count%ColumnSize == 0)
@@ -294,7 +300,7 @@ void CSpectator::OnRender()
 			Rect.y = Height/2.0f+y+10.0f-20.0f*ScaleY;
 			Rect.w = 270.0f;
 			Rect.h = 20.0f+40.0f*ScaleY;
-			RenderTools()->DrawRoundRect(&Rect, vec4(1.0f, 1.0f, 1.0f, 0.25f), 20.0f);
+			Rect.Draw(vec4(1.0f, 1.0f, 1.0f, 0.25f), 20.0f);
 		}
 
 		Selected = false;
@@ -307,13 +313,16 @@ void CSpectator::OnRender()
 		}
 		TextRender()->TextColor(1.0f, 1.0f, 1.0f, Selected?1.0f:0.5f);
 		char aBuf[64];
-		str_format(aBuf, sizeof(aBuf), "%s", g_Config.m_ClShowsocial ? m_pClient->m_aClients[i].m_aName : "");
+		str_format(aBuf, sizeof(aBuf), "%s", Config()->m_ClShowsocial ? m_pClient->m_aClients[i].m_aName : "");
 
-		CTextCursor Cursor;
-		TextRender()->SetCursor(&Cursor, Width/2.0f+x+50.0f, Height/2.0f+y+5.0f, FontSize, TEXTFLAG_RENDER);
-
-		RenderTools()->DrawClientID(TextRender(), &Cursor, i);
-		TextRender()->TextEx(&Cursor, aBuf, -1);
+		static CTextCursor s_PlayerNameCursor;
+		s_PlayerNameCursor.m_FontSize = FontSize;
+		s_PlayerNameCursor.Reset();
+		
+		vec2 CursorPosition = vec2(Width/2.0f+x+50.0f, Height/2.0f+y+5.0f);
+		CursorPosition.x += UI()->DrawClientID(s_PlayerNameCursor.m_FontSize, CursorPosition, i);
+		s_PlayerNameCursor.MoveTo(CursorPosition.x, CursorPosition.y);
+		TextRender()->TextOutlined(&s_PlayerNameCursor, aBuf, -1);
 
 		// flag
 		if(m_pClient->m_GameInfo.m_GameFlags&GAMEFLAG_FLAGS &&
@@ -340,15 +349,7 @@ void CSpectator::OnRender()
 	}
 	TextRender()->TextColor(1.0f, 1.0f, 1.0f, 1.0f);
 
-	// draw cursor
-	Graphics()->TextureSet(g_pData->m_aImages[IMAGE_CURSOR].m_Id);
-	Graphics()->WrapClamp();
-	Graphics()->QuadsBegin();
-	Graphics()->SetColor(1.0f, 1.0f, 1.0f, 1.0f);
-	IGraphics::CQuadItem QuadItem(m_SelectorMouse.x+Width/2.0f, m_SelectorMouse.y+Height/2.0f, 48.0f, 48.0f);
-	Graphics()->QuadsDrawTL(&QuadItem, 1);
-	Graphics()->QuadsEnd();
-	Graphics()->WrapNormal();
+	RenderTools()->RenderCursor(m_SelectorMouse.x + Width/2.0f, m_SelectorMouse.y + Height/2.0f, 48.0f);
 }
 
 void CSpectator::OnReset()

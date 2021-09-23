@@ -61,7 +61,7 @@ bool CLocalizationDatabase::Load(const char *pFilename, IStorage *pStorage, ICon
 	if(!File)
 		return false;
 	int FileSize = (int)io_length(File);
-	char *pFileData = (char *)mem_alloc(FileSize, 1);
+	char *pFileData = (char *)mem_alloc(FileSize);
 	io_read(File, pFileData, FileSize);
 	io_close(File);
 
@@ -126,7 +126,7 @@ const char *CLocalizationDatabase::FindString(unsigned Hash, unsigned ContextHas
 {
 	CString String;
 	String.m_Hash = Hash;
-	String.m_ContextHash = 0; // this is ignored for the search anyway
+	String.m_ContextHash = ContextHash;
 	sorted_array<CString>::range r = ::find_binary(m_Strings.all(), String);
 	if(r.empty())
 		return 0;
