@@ -925,7 +925,7 @@ void CMenus::RenderServerbrowserServerList(CUIRect View)
 		int NewFilter = SelectedFilter;
 		int ToBeSelectedServer = -1;
 
-		if(m_DownArrowPressed)
+		if(UI()->ConsumeHotkey(CUI::HOTKEY_DOWN))
 		{
 			if(!CtrlPressed)
 			{
@@ -939,7 +939,7 @@ void CMenus::RenderServerbrowserServerList(CUIRect View)
 				NewFilter = SelectedFilter + 1;
 			}
 		}
-		else if(m_UpArrowPressed)
+		else if(UI()->ConsumeHotkey(CUI::HOTKEY_UP))
 		{
 			if(!CtrlPressed)
 			{
@@ -1141,7 +1141,7 @@ void CMenus::RenderServerbrowserServerList(CUIRect View)
 	UI()->DoLabel(&Label, Localize("Search:"), FontSize, CUI::ALIGN_LEFT);
 	EditBox.VSplitRight(EditBox.h, &EditBox, &Button);
 	static float s_ClearOffset = 0.0f;
-	if(DoEditBox(&Config()->m_BrFilterString, &EditBox, Config()->m_BrFilterString, sizeof(Config()->m_BrFilterString), FontSize, &s_ClearOffset, false, CUIRect::CORNER_ALL))
+	if(DoEditBox(&Config()->m_BrFilterString, &EditBox, Config()->m_BrFilterString, sizeof(Config()->m_BrFilterString), FontSize, &s_ClearOffset, false, CUIRect::CORNER_L))
 	{
 		Client()->ServerBrowserUpdate();
 		ServerBrowserFilterOnUpdate();
@@ -1150,7 +1150,7 @@ void CMenus::RenderServerbrowserServerList(CUIRect View)
 	// clear button
 	{
 		static CButtonContainer s_ClearButton;
-		if(DoButton_SpriteID(&s_ClearButton, IMAGE_TOOLICONS, SPRITE_TOOL_X_A, false, &Button, CUIRect::CORNER_ALL, 5.0f, true))
+		if(DoButton_SpriteID(&s_ClearButton, IMAGE_TOOLICONS, SPRITE_TOOL_X_A, false, &Button, CUIRect::CORNER_R, 5.0f, true))
 		{
 			Config()->m_BrFilterString[0] = 0;
 			UI()->SetActiveItem(&Config()->m_BrFilterString);
@@ -1240,7 +1240,7 @@ void CMenus::RenderServerbrowserSidebar(CUIRect View)
 	View.Draw(vec4(0.0f, 0.0f, 0.0f, Config()->m_ClMenuAlpha/100.0f));
 
 	// handle Tab key
-	if(m_TabPressed)
+	if(UI()->ConsumeHotkey(CUI::HOTKEY_TAB))
 	{
 		if(Input()->KeyIsPressed(KEY_LSHIFT) || Input()->KeyIsPressed(KEY_RSHIFT))
 		{
@@ -1683,7 +1683,7 @@ void CMenus::RenderServerbrowserFilterTab(CUIRect View)
 		if(NeedScrollbar)
 		{
 			ServerFilter.HSplitTop(LineSize, &Button, &ServerFilter);
-			s_ScrollValue = DoScrollbarH(&s_ScrollValue, &Button, s_ScrollValue);
+			s_ScrollValue = UI()->DoScrollbarH(&s_ScrollValue, &Button, s_ScrollValue);
 		}
 		else
 			ServerFilter.HSplitTop(4.f, &Button, &ServerFilter); // Leave some space in between edit boxes
@@ -1761,7 +1761,7 @@ void CMenus::RenderServerbrowserFilterTab(CUIRect View)
 		Button.Draw(vec4(0.0f, 0.0f, 0.0f, 0.25f));
 		Button.VMargin(4.0f, &Button);
 		static int s_BrFilterPing = 0;
-		Value = LogarithmicScrollbarScale.ToAbsolute(DoScrollbarH(&s_BrFilterPing, &Button, LogarithmicScrollbarScale.ToRelative(Value, Min, Max)), Min, Max);
+		Value = LogarithmicScrollbarScale.ToAbsolute(UI()->DoScrollbarH(&s_BrFilterPing, &Button, LogarithmicScrollbarScale.ToRelative(Value, Min, Max)), Min, Max);
 		if(Value != FilterInfo.m_Ping)
 		{
 			FilterInfo.m_Ping = Value;
@@ -1976,7 +1976,7 @@ void CMenus::RenderDetailScoreboard(CUIRect View, const CServerInfo *pInfo, int 
 			CUIRect Scroll;
 			View.HSplitBottom(14.0f, &View, &Scroll);
 			Scroll.VMargin(5.0f, &Scroll);
-			s_ScrollValue = DoScrollbarH(&s_ScrollValue, &Scroll, s_ScrollValue);
+			s_ScrollValue = UI()->DoScrollbarH(&s_ScrollValue, &Scroll, s_ScrollValue);
 			View.x += (View.w - Width) * s_ScrollValue;
 			LineHeight = 0.25f*View.h;
 		}
@@ -2099,10 +2099,9 @@ void CMenus::RenderServerbrowserBottomBox(CUIRect MainView)
 	MainView.VSplitLeft(Spacing, 0, &MainView); // little space
 	MainView.VSplitLeft(ButtonWidth, &Button, &MainView);
 	static CButtonContainer s_JoinButton;
-	if(DoButton_Menu(&s_JoinButton, Localize("Connect"), 0, &Button) || m_EnterPressed)
+	if(DoButton_Menu(&s_JoinButton, Localize("Connect"), 0, &Button) || UI()->ConsumeHotkey(CUI::HOTKEY_ENTER))
 	{
 		Client()->Connect(GetServerBrowserAddress());
-		m_EnterPressed = false;
 	}
 }
 

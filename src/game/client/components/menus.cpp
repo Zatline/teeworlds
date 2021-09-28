@@ -33,8 +33,8 @@
 #include "menus.h"
 #include "skins.h"
 
-float CMenus::ms_ListheaderHeight = 17.0f;
-float CMenus::ms_FontmodHeight = 0.8f;
+float CMenus::ms_ListheaderHeight = CUI::ms_ListheaderHeight;
+float CMenus::ms_FontmodHeight = CUI::ms_FontmodHeight;
 
 CMenus *CMenus::CUIElementBase::m_pMenus = 0;
 CRenderTools *CMenus::CUIElementBase::m_pRenderTools = 0;
@@ -78,13 +78,6 @@ CMenus::CMenus()
 	m_MenuPageOld = PAGE_START;
 
 	m_PopupActive = false;
-
-	m_EscapePressed = false;
-	m_EnterPressed = false;
-	m_TabPressed = false;
-	m_DeletePressed = false;
-	m_UpArrowPressed = false;
-	m_DownArrowPressed = false;
 
 	m_aDemoLoadingFile[0] = 0;
 	m_DemoLoadingPopupRendered = false;
@@ -531,71 +524,6 @@ void CMenus::DoEditBoxOptionUTF8(void *pID, char *pOption, unsigned OptionSize, 
 	DoEditBoxUTF8(pID, &EditBox, pOption, OptionSize, OptionMaxLength, pRect->h*ms_FontmodHeight*0.8f, pOffset, Hidden);
 }
 
-void CMenus::DoScrollbarOption(void *pID, int *pOption, const CUIRect *pRect, const char *pStr, int Min, int Max, IScrollbarScale *pScale, bool Infinite)
-{
-	int Value = *pOption;
-	if(Infinite)
-	{
-		Min += 1;
-		Max += 1;
-		if(Value == 0)
-			Value = Max;
-	}
-
-	char aBufMax[128];
-	str_format(aBufMax, sizeof(aBufMax), "%s: %i", pStr, Max);
-	char aBuf[128];
-	if(!Infinite || Value != Max)
-		str_format(aBuf, sizeof(aBuf), "%s: %i", pStr, Value);
-	else
-		str_format(aBuf, sizeof(aBuf), "%s: \xe2\x88\x9e", pStr);
-
-	float FontSize = pRect->h*ms_FontmodHeight*0.8f;
-	float VSplitVal = max(TextRender()->TextWidth(FontSize, aBuf, -1), TextRender()->TextWidth(FontSize, aBufMax, -1));
-
-	pRect->Draw(vec4(0.0f, 0.0f, 0.0f, 0.25f));
-
-	CUIRect Label, ScrollBar;
-	pRect->VSplitLeft(pRect->h+10.0f+VSplitVal, &Label, &ScrollBar);
-	Label.VSplitLeft(Label.h+5.0f, 0, &Label);
-	Label.y += 2.0f;
-	UI()->DoLabel(&Label, aBuf, FontSize, CUI::ALIGN_LEFT);
-
-	ScrollBar.VMargin(4.0f, &ScrollBar);
-	Value = pScale->ToAbsolute(DoScrollbarH(pID, &ScrollBar, pScale->ToRelative(Value, Min, Max)), Min, Max);
-	if(Infinite && Value == Max)
-		Value = 0;
-
-	*pOption = Value;
-}
-
-void CMenus::DoScrollbarOptionLabeled(void *pID, int *pOption, const CUIRect *pRect, const char *pStr, const char* aLabels[], int Num, IScrollbarScale *pScale)
-{
-	int Value = clamp(*pOption, 0, Num - 1);
-	const int Max = Num - 1;
-
-	char aBuf[128];
-	str_format(aBuf, sizeof(aBuf), "%s: %s", pStr, aLabels[Value]);
-
-	float FontSize = pRect->h*ms_FontmodHeight*0.8f;
-
-	pRect->Draw(vec4(0.0f, 0.0f, 0.0f, 0.25f));
-
-	CUIRect Label, ScrollBar;
-	pRect->VSplitLeft(pRect->h+5.0f, 0, &Label);
-	Label.VSplitRight(60.0f, &Label, &ScrollBar);
-	Label.y += 2.0f;
-	UI()->DoLabel(&Label, aBuf, FontSize, CUI::ALIGN_LEFT);
-
-	ScrollBar.VMargin(4.0f, &ScrollBar);
-	Value = pScale->ToAbsolute(DoScrollbarH(pID, &ScrollBar, pScale->ToRelative(Value, 0, Max)), 0, Max);
-
-	if(UI()->HotItem() != pID && !UI()->CheckActiveItem(pID) && UI()->MouseHovered(pRect) && UI()->MouseButtonClicked(0))
-		Value = (Value + 1) % Num;
-
-	*pOption = clamp(Value, 0, Max);
-}
-
 float CMenus::DoIndependentDropdownMenu(void *pID, const CUIRect *pRect, const char *pStr, float HeaderHeight, FDropdownCallback pfnCallback, bool *pActive)
 {
 	CUIRect View = *pRect;
@@ -653,144 +581,6 @@ void CMenus::DoInfoBox(const CUIRect *pRect, const char *pLabel, const char *pVa
 
 	Value.y += 2.0f;
 	UI()->DoLabel(&Value, pValue, pRect->h*ms_FontmodHeight*0.8f, CUI::ALIGN_CENTER);
-}
-
-float CMenus::DoScrollbarV(const void *pID, const CUIRect *pRect, float Current)
-{
-	// layout
-	CUIRect Handle;
-	pRect->HSplitTop(min(pRect->h/8.0f, 33.0f), &Handle, 0);
-	Handle.y += (pRect->h-Handle.h)*Current;
-	Handle.VMargin(5.0f, &Handle);
-
-	CUIRect Rail;
-	pRect->VMargin(5.0f, &Rail);
-
-	// logic
-	static float s_OffsetY;
-	const bool InsideHandle = UI()->MouseHovered(&Handle);
-	const bool InsideRail = UI()->MouseHovered(&Rail);
-	float ReturnValue = Current;
-	bool Grabbed = false; // whether to apply the offset
-
-	if(UI()->CheckActiveItem(pID))
-	{
-		if(UI()->MouseButton(0))
-			Grabbed = true;
-		else
-			UI()->SetActiveItem(0);
-	}
-	else if(UI()->HotItem() == pID)
-	{
-		if(UI()->MouseButton(0))
-		{
-			s_OffsetY = UI()->MouseY()-Handle.y;
-			UI()->SetActiveItem(pID);
-			Grabbed = true;
-		}
-	}
-	else if(UI()->MouseButtonClicked(0) && !InsideHandle && InsideRail)
-	{
-		s_OffsetY = Handle.h * 0.5f;
-		UI()->SetActiveItem(pID);
-		Grabbed = true;
-	}
-
-	if(InsideHandle)
-	{
-		UI()->SetHotItem(pID);
-	}
-
-	if(Grabbed)
-	{
-		const float Min = pRect->y;
-		const float Max = pRect->h-Handle.h;
-		const float Cur = UI()->MouseY()-s_OffsetY;
-		ReturnValue = clamp((Cur-Min)/Max, 0.0f, 1.0f);
-	}
-
-	// render
-	Rail.Draw(vec4(1.0f, 1.0f, 1.0f, 0.25f), Rail.w/2.0f);
-
-	vec4 Color;
-	if(Grabbed)
-		Color = vec4(0.9f, 0.9f, 0.9f, 1.0f);
-	else if(InsideHandle)
-		Color = vec4(1.0f, 1.0f, 1.0f, 1.0f);
-	else
-		Color = vec4(0.8f, 0.8f, 0.8f, 1.0f);
-	Handle.Draw(Color, Handle.w/2.0f);
-
-	return ReturnValue;
-}
-
-float CMenus::DoScrollbarH(const void *pID, const CUIRect *pRect, float Current)
-{
-	// layout
-	CUIRect Handle;
-	pRect->VSplitLeft(max(min(pRect->w/8.0f, 33.0f), pRect->h), &Handle, 0);
-	Handle.x += (pRect->w-Handle.w)*clamp(Current, 0.0f, 1.0f);
-	Handle.HMargin(5.0f, &Handle);
-
-	CUIRect Rail;
-	pRect->HMargin(5.0f, &Rail);
-
-	// logic
-	static float s_OffsetX;
-	const bool InsideHandle = UI()->MouseHovered(&Handle);
-	const bool InsideRail = UI()->MouseHovered(&Rail);
-	float ReturnValue = Current;
-	bool Grabbed = false; // whether to apply the offset
-
-	if(UI()->CheckActiveItem(pID))
-	{
-		if(UI()->MouseButton(0))
-			Grabbed = true;
-		else
-			UI()->SetActiveItem(0);
-	}
-	else if(UI()->HotItem() == pID)
-	{
-		if(UI()->MouseButton(0))
-		{
-			s_OffsetX = UI()->MouseX()-Handle.x;
-			UI()->SetActiveItem(pID);
-			Grabbed = true;
-		}
-	}
-	else if(UI()->MouseButtonClicked(0) && !InsideHandle && InsideRail)
-	{
-		s_OffsetX = Handle.w * 0.5f;
-		UI()->SetActiveItem(pID);
-		Grabbed = true;
-	}
-
-	if(InsideHandle)
-	{
-		UI()->SetHotItem(pID);
-	}
-
-	if(Grabbed)
-	{
-		const float Min = pRect->x;
-		const float Max = pRect->w-Handle.w;
-		const float Cur = UI()->MouseX()-s_OffsetX;
-		ReturnValue = clamp((Cur-Min)/Max, 0.0f, 1.0f);
-	}
-
-	// render
-	Rail.Draw(vec4(1.0f, 1.0f, 1.0f, 0.25f), Rail.h/2.0f);
-
-	vec4 Color;
-	if(Grabbed)
-		Color = vec4(0.9f, 0.9f, 0.9f, 1.0f);
-	else if(InsideHandle)
-		Color = vec4(1.0f, 1.0f, 1.0f, 1.0f);
-	else
-		Color = vec4(0.8f, 0.8f, 0.8f, 1.0f);
-	Handle.Draw(Color, Handle.h/2.0f);
-
-	return ReturnValue;
 }
 
 void CMenus::DoJoystickBar(const CUIRect *pRect, float Current, float Tolerance, bool Active)
@@ -1228,7 +1018,7 @@ void CMenus::RenderBackButton(CUIRect MainView)
 	MainView.HSplitTop(25.0f, &MainView, 0);
 	Button = MainView;
 	static CButtonContainer s_MenuButton;
-	if(DoButton_Menu(&s_MenuButton, Localize("Back"), 0, &Button) || m_EscapePressed)
+	if(DoButton_Menu(&s_MenuButton, Localize("Back"), 0, &Button) || UI()->ConsumeHotkey(CUI::HOTKEY_ESCAPE))
 	{
 		SetMenuPage(m_MenuPageOld);
 		m_MenuPageOld = PAGE_START;
@@ -1693,11 +1483,11 @@ void CMenus::RenderMenu(CUIRect Screen)
 			BottomBar.VSplitMid(&No, &Yes, SpacingW);
 
 			static CButtonContainer s_ButtonAbort;
-			if(DoButton_Menu(&s_ButtonAbort, Localize("No"), 0, &No) || m_EscapePressed)
+			if(DoButton_Menu(&s_ButtonAbort, Localize("No"), 0, &No) || UI()->ConsumeHotkey(CUI::HOTKEY_ESCAPE))
 				m_Popup = POPUP_NONE;
 
 			static CButtonContainer s_ButtonTryAgain;
-			if(DoButton_Menu(&s_ButtonTryAgain, Localize("Yes"), 0, &Yes) || m_EnterPressed)
+			if(DoButton_Menu(&s_ButtonTryAgain, Localize("Yes"), 0, &Yes) || UI()->ConsumeHotkey(CUI::HOTKEY_ENTER))
 				Client()->Quit();
 		}
 		else if(m_Popup == POPUP_PASSWORD)
@@ -1731,14 +1521,14 @@ void CMenus::RenderMenu(CUIRect Screen)
 			BottomBar.VSplitMid(&Abort, &TryAgain, SpacingW);
 
 			static CButtonContainer s_ButtonAbort;
-			if(DoButton_Menu(&s_ButtonAbort, Localize("Abort"), 0, &Abort) || m_EscapePressed)
+			if(DoButton_Menu(&s_ButtonAbort, Localize("Abort"), 0, &Abort) || UI()->ConsumeHotkey(CUI::HOTKEY_ESCAPE))
 			{
 				m_Popup = POPUP_NONE;
 				m_aPasswordPopupServerAddress[0] = '\0';
 			}
 
 			static CButtonContainer s_ButtonTryAgain;
-			if(DoButton_Menu(&s_ButtonTryAgain, Localize("Try again"), 0, &TryAgain) || m_EnterPressed)
+			if(DoButton_Menu(&s_ButtonTryAgain, Localize("Try again"), 0, &TryAgain) || UI()->ConsumeHotkey(CUI::HOTKEY_ENTER))
 			{
 				Client()->Connect(ServerInfo.m_aHostname);
 				m_aPasswordPopupServerAddress[0] = '\0';
@@ -1747,7 +1537,7 @@ void CMenus::RenderMenu(CUIRect Screen)
 		else if(m_Popup == POPUP_CONNECTING)
 		{
 			static CButtonContainer s_ButtonConnect;
-			if(DoButton_Menu(&s_ButtonConnect, Localize("Abort"), 0, &BottomBar) || m_EscapePressed || m_EnterPressed)
+			if(DoButton_Menu(&s_ButtonConnect, Localize("Abort"), 0, &BottomBar) || UI()->ConsumeHotkey(CUI::HOTKEY_ESCAPE) || UI()->ConsumeHotkey(CUI::HOTKEY_ENTER))
 			{
 				Client()->Disconnect();
 				m_Popup = POPUP_NONE;
@@ -1834,7 +1624,7 @@ void CMenus::RenderMenu(CUIRect Screen)
 			RenderLanguageSelection(Box, false);
 
 			static CButtonContainer s_ButtonLanguage;
-			if(DoButton_Menu(&s_ButtonLanguage, Localize("Ok"), 0, &BottomBar) || m_EscapePressed || m_EnterPressed)
+			if(DoButton_Menu(&s_ButtonLanguage, Localize("Ok"), 0, &BottomBar) || UI()->ConsumeHotkey(CUI::HOTKEY_ESCAPE) || UI()->ConsumeHotkey(CUI::HOTKEY_ENTER))
 				m_Popup = POPUP_FIRST_LAUNCH;
 		}
 		else if(m_Popup == POPUP_COUNTRY)
@@ -1890,13 +1680,13 @@ void CMenus::RenderMenu(CUIRect Screen)
 			Part.VMargin(120.0f, &Part);
 
 			static CButtonContainer s_ButtonCountry;
-			if(DoButton_Menu(&s_ButtonCountry, Localize("Ok"), 0, &BottomBar) || m_EnterPressed)
+			if(DoButton_Menu(&s_ButtonCountry, Localize("Ok"), 0, &BottomBar) || UI()->ConsumeHotkey(CUI::HOTKEY_ENTER))
 			{
 				(this->*m_aPopupButtons[BUTTON_CONFIRM].m_pfnCallback)();
 				m_Popup = POPUP_NONE;
 			}
 
-			if(m_EscapePressed)
+			if(UI()->ConsumeHotkey(CUI::HOTKEY_ESCAPE))
 			{
 				m_PopupSelection = -2;
 				m_Popup = POPUP_NONE;
@@ -1920,11 +1710,11 @@ void CMenus::RenderMenu(CUIRect Screen)
 			BottomBar.VSplitMid(&No, &Yes, SpacingW);
 
 			static CButtonContainer s_ButtonNo;
-			if(DoButton_Menu(&s_ButtonNo, Localize("No"), 0, &No) || m_EscapePressed)
+			if(DoButton_Menu(&s_ButtonNo, Localize("No"), 0, &No) || UI()->ConsumeHotkey(CUI::HOTKEY_ESCAPE))
 				m_Popup = POPUP_NONE;
 
 			static CButtonContainer s_ButtonYes;
-			if(DoButton_Menu(&s_ButtonYes, Localize("Yes"), !m_aCurrentDemoFile[0], &Yes) || m_EnterPressed)
+			if(DoButton_Menu(&s_ButtonYes, Localize("Yes"), !m_aCurrentDemoFile[0], &Yes) || UI()->ConsumeHotkey(CUI::HOTKEY_ENTER))
 			{
 				if(m_aCurrentDemoFile[0])
 				{
@@ -1969,17 +1759,16 @@ void CMenus::RenderMenu(CUIRect Screen)
 			BottomBar.VSplitMid(&No, &Yes, SpacingW);
 
 			static CButtonContainer s_ButtonAbort;
-			if(DoButton_Menu(&s_ButtonAbort, Localize("No"), 0, &No) || m_EscapePressed)
+			if(DoButton_Menu(&s_ButtonAbort, Localize("No"), 0, &No) || UI()->ConsumeHotkey(CUI::HOTKEY_ESCAPE))
 				m_Popup = POPUP_NONE;
 
 			static CButtonContainer s_ButtonTryAgain;
-			if(DoButton_Menu(&s_ButtonTryAgain, Localize("Yes"), !m_aSaveSkinName[0], &Yes) || m_EnterPressed)
+			if(DoButton_Menu(&s_ButtonTryAgain, Localize("Yes"), !m_aSaveSkinName[0], &Yes) || UI()->ConsumeHotkey(CUI::HOTKEY_ENTER))
 			{
 				if(m_aSaveSkinName[0] && m_aSaveSkinName[0] != 'x' && m_aSaveSkinName[1] != '_')
 				{
 					m_Popup = POPUP_NONE;
 					m_pClient->m_pSkins->SaveSkinfile(m_aSaveSkinName);
-					m_aSaveSkinName[0] = 0;
 					m_RefreshSkinSelector = true;
 				}
 			}
@@ -1999,7 +1788,7 @@ void CMenus::RenderMenu(CUIRect Screen)
 
 			// button
 			static CButtonContainer s_EnterButton;
-			if(DoButton_Menu(&s_EnterButton, Localize("Enter"), 0, &BottomBar) || m_EnterPressed)
+			if(DoButton_Menu(&s_EnterButton, Localize("Enter"), 0, &BottomBar) || UI()->ConsumeHotkey(CUI::HOTKEY_ENTER))
 			{
 				if(Config()->m_PlayerName[0])
 					m_Popup = POPUP_NONE;
@@ -2017,7 +1806,7 @@ void CMenus::RenderMenu(CUIRect Screen)
 			if(m_Popup == POPUP_MESSAGE)
 			{
 				static CButtonContainer s_ButtonConfirm;
-				if(DoButton_Menu(&s_ButtonConfirm, m_aPopupButtons[BUTTON_CONFIRM].m_aLabel, 0, &BottomBar) || m_EscapePressed || m_EnterPressed)
+				if(DoButton_Menu(&s_ButtonConfirm, m_aPopupButtons[BUTTON_CONFIRM].m_aLabel, 0, &BottomBar) || UI()->ConsumeHotkey(CUI::HOTKEY_ESCAPE) || UI()->ConsumeHotkey(CUI::HOTKEY_ENTER))
 				{
 					m_Popup = m_aPopupButtons[BUTTON_CONFIRM].m_NextPopup;
 					(this->*m_aPopupButtons[BUTTON_CONFIRM].m_pfnCallback)();
@@ -2029,14 +1818,14 @@ void CMenus::RenderMenu(CUIRect Screen)
 				BottomBar.VSplitMid(&CancelButton, &ConfirmButton, SpacingW);
 
 				static CButtonContainer s_ButtonCancel;
-				if(DoButton_Menu(&s_ButtonCancel, m_aPopupButtons[BUTTON_CANCEL].m_aLabel, 0, &CancelButton) || m_EscapePressed)
+				if(DoButton_Menu(&s_ButtonCancel, m_aPopupButtons[BUTTON_CANCEL].m_aLabel, 0, &CancelButton) || UI()->ConsumeHotkey(CUI::HOTKEY_ESCAPE))
 				{
 					m_Popup = m_aPopupButtons[BUTTON_CANCEL].m_NextPopup;
 					(this->*m_aPopupButtons[BUTTON_CANCEL].m_pfnCallback)();
 				}
 
 				static CButtonContainer s_ButtonConfirm;
-				if(DoButton_Menu(&s_ButtonConfirm, m_aPopupButtons[BUTTON_CONFIRM].m_aLabel, 0, &ConfirmButton) || m_EnterPressed)
+				if(DoButton_Menu(&s_ButtonConfirm, m_aPopupButtons[BUTTON_CONFIRM].m_aLabel, 0, &ConfirmButton) || UI()->ConsumeHotkey(CUI::HOTKEY_ENTER))
 				{
 					m_Popup = m_aPopupButtons[BUTTON_CONFIRM].m_NextPopup;
 					(this->*m_aPopupButtons[BUTTON_CONFIRM].m_pfnCallback)();
@@ -2104,36 +1893,17 @@ bool CMenus::OnInput(IInput::CEvent e)
 {
 	m_LastInput = time_get();
 
-	// special handle esc and enter for popup purposes
-	if(e.m_Flags&IInput::FLAG_PRESS)
-	{
-		if(e.m_Key == KEY_ESCAPE)
-		{
-			m_EscapePressed = true;
-			SetActive(!IsActive());
-			return true;
-		}
-	}
+	UI()->OnInput(e);
 
-	if(IsActive())
+	// special handle esc and enter for popup purposes
+	if(e.m_Flags&IInput::FLAG_PRESS && e.m_Key == KEY_ESCAPE)
 	{
-		if(e.m_Flags&IInput::FLAG_PRESS)
-		{
-			// special for popups
-			if(e.m_Key == KEY_RETURN || e.m_Key == KEY_KP_ENTER)
-				m_EnterPressed = true;
-			else if(e.m_Key == KEY_TAB && !Input()->KeyIsPressed(KEY_LALT) && !Input()->KeyIsPressed(KEY_RALT))
-				m_TabPressed = true;
-			else if(e.m_Key == KEY_DELETE)
-				m_DeletePressed = true;
-			else if(e.m_Key == KEY_UP)
-				m_UpArrowPressed = true;
-			else if(e.m_Key == KEY_DOWN)
-				m_DownArrowPressed = true;
-		}
+		SetActive(!IsActive());
 		return true;
 	}
-	return false;
+
+	// TODO: check for active lineinput instead
+	return IsActive();
 }
 
 void CMenus::OnConsoleInit()
@@ -2249,12 +2019,7 @@ void CMenus::OnRender()
 		}
 	}
 
-	m_EscapePressed = false;
-	m_EnterPressed = false;
-	m_TabPressed = false;
-	m_DeletePressed = false;
-	m_UpArrowPressed = false;
-	m_DownArrowPressed = false;
+	UI()->ClearHotkeys();
 }
 
 bool CMenus::CheckHotKey(int Key) const

@@ -440,69 +440,6 @@ int CEditor::DoEditBox(void *pID, const CUIRect *pRect, char *pStr, unsigned Str
 	return ReturnValue;
 }
 
-vec4 CEditor::ButtonColorMul(const void *pID)
-{
-	if(UI()->CheckActiveItem(pID))
-		return vec4(1,1,1,0.5f);
-	else if(UI()->HotItem() == pID)
-		return vec4(1,1,1,1.5f);
-	return vec4(1,1,1,1);
-}
-
-float CEditor::UiDoScrollbarV(const void *pID, const CUIRect *pRect, float Current)
-{
-	CUIRect Handle;
-	static float s_OffsetY;
-	pRect->HSplitTop(33, &Handle, 0);
-
-	Handle.y += (pRect->h-Handle.h)*Current;
-
-	// logic
-	float Ret = Current;
-	bool Inside = UI()->MouseInside(&Handle);
-
-	if(UI()->CheckActiveItem(pID))
-	{
-		if(!UI()->MouseButton(0))
-			UI()->SetActiveItem(0);
-
-		float Min = pRect->y;
-		float Max = pRect->h-Handle.h;
-		float Cur = UI()->MouseY()-s_OffsetY;
-		Ret = (Cur-Min)/Max;
-		if(Ret < 0.0f) Ret = 0.0f;
-		if(Ret > 1.0f) Ret = 1.0f;
-	}
-	else if(UI()->HotItem() == pID)
-	{
-		if(UI()->MouseButton(0))
-		{
-			UI()->SetActiveItem(pID);
-			s_OffsetY = UI()->MouseY()-Handle.y;
-		}
-	}
-
-	if(Inside)
-		UI()->SetHotItem(pID);
-
-	// render
-	CUIRect Rail;
-	pRect->VMargin(5.0f, &Rail);
-	Rail.Draw(vec4(1,1,1,0.25f), 0.0f, CUIRect::CORNER_NONE);
-
-	CUIRect Slider = Handle;
-	Slider.w = Rail.x-Slider.x;
-	Slider.Draw(vec4(1,1,1,0.25f), 2.5f, CUIRect::CORNER_L);
-	Slider.x = Rail.x+Rail.w;
-	Slider.Draw(vec4(1,1,1,0.25f), 2.5f, CUIRect::CORNER_R);
-
-	Slider = Handle;
-	Slider.Margin(5.0f, &Slider);
-	Slider.Draw(vec4(1,1,1,0.25f)*ButtonColorMul(pID), 2.5f);
-
-	return Ret;
-}
-
 vec4 CEditor::GetButtonColor(const void *pID, int Checked)
 {
 	if(Checked < 0)
@@ -1792,7 +1729,7 @@ void CEditor::DoQuadEnvPoint(const CQuad *pQuad, int QIndex, int PIndex)
 	Graphics()->QuadsDraw(&QuadItem, 1);
 }
 
-void CEditor::DoMapEditor(CUIRect View, CUIRect ToolBar)
+void CEditor::DoMapEditor(CUIRect View)
 {
 	// render all good stuff
 	if(!m_ShowTilePicker)
@@ -1801,7 +1738,6 @@ void CEditor::DoMapEditor(CUIRect View, CUIRect ToolBar)
 		{
 			if(m_Map.m_lGroups[g]->m_Visible)
 				m_Map.m_lGroups[g]->Render();
-			//UI()->ClipEnable(&view);
 		}
 
 		// render the game above everything else
@@ -2385,7 +2321,6 @@ void CEditor::DoMapEditor(CUIRect View, CUIRect ToolBar)
 	}
 
 	UI()->MapScreen();
-	//UI()->ClipDisable();
 }
 
 
@@ -2560,18 +2495,13 @@ int CEditor::DoProperties(CUIRect *pToolBox, CProperty *pProps, int *pIDs, int *
 	return Change;
 }
 
-void CEditor::RenderLayers(CUIRect ToolBox, CUIRect ToolBar, CUIRect View)
+void CEditor::RenderLayers(CUIRect ToolBox, CUIRect View)
 {
 	CUIRect LayersBox = ToolBox;
-
-	if(!m_GuiActive)
-		return;
-
 	CUIRect Slot, Button;
 	char aBuf[64];
 
 	float LayersHeight = 12.0f;	 // Height of AddGroup button
-	static int s_ScrollBar = 0;
 	static float s_ScrollValue = 0;
 
 	for(int g = 0; g < m_Map.m_lGroups.size(); g++)
@@ -2590,8 +2520,7 @@ void CEditor::RenderLayers(CUIRect ToolBox, CUIRect ToolBar, CUIRect View)
 		CUIRect Scroll;
 		LayersBox.VSplitRight(15.0f, &LayersBox, &Scroll);
 		LayersBox.VSplitRight(3.0f, &LayersBox, 0);	// extra spacing
-		Scroll.HMargin(5.0f, &Scroll);
-		s_ScrollValue = UiDoScrollbarV(&s_ScrollBar, &Scroll, s_ScrollValue);
+		s_ScrollValue = UI()->DoScrollbarV(&s_ScrollValue, &Scroll, s_ScrollValue);
 
 		if(UI()->MouseInside(&Scroll) || UI()->MouseInside(&LayersBox))
 		{
@@ -2856,7 +2785,7 @@ void CEditor::SortImages()
 }
 
 
-void CEditor::RenderImagesList(CUIRect ToolBox, CUIRect ToolBar)
+void CEditor::RenderImagesList(CUIRect ToolBox)
 {
 	static float s_ScrollValue = 0.0f;
 	const float RowHeight = 14.0f;
@@ -2871,9 +2800,7 @@ void CEditor::RenderImagesList(CUIRect ToolBox, CUIRect ToolBar)
 		CUIRect Scroll;
 		ToolBox.VSplitRight(15.0f, &ToolBox, &Scroll);
 		ToolBox.VSplitRight(3.0f, &ToolBox, 0);	// extra spacing
-		Scroll.HMargin(5.0f, &Scroll);
-		s_ScrollValue = UiDoScrollbarV(&s_ScrollValue, &Scroll, s_ScrollValue);
-
+		s_ScrollValue = UI()->DoScrollbarV(&s_ScrollValue, &Scroll, s_ScrollValue);
 		if(UI()->MouseInside(&Scroll) || UI()->MouseInside(&ToolBox))
 		{
 			int ScrollNum = (int)((ImagesHeight-ToolBox.h)/RowHeight)+1;
@@ -3149,9 +3076,7 @@ void CEditor::RenderFileDialog()
 	}
 
 	int Num = (int)(View.h/17.0f)+1;
-	static int ScrollBar = 0;
-	Scroll.HMargin(5.0f, &Scroll);
-	m_FileDialogScrollValue = UiDoScrollbarV(&ScrollBar, &Scroll, m_FileDialogScrollValue);
+	m_FileDialogScrollValue = UI()->DoScrollbarV(&m_FileDialogScrollValue, &Scroll, m_FileDialogScrollValue);
 
 	int ScrollNum = m_FileList.size()-Num+1;
 	if(ScrollNum > 0)
@@ -4156,7 +4081,6 @@ void CEditor::Render()
 
 	if(m_GuiActive)
 	{
-
 		View.HSplitTop(16.0f, &MenuBar, &View);
 		View.HSplitTop(53.0f, &ToolBar, &View);
 		View.VSplitLeft(100.0f, &ToolBox, &View);
@@ -4175,7 +4099,7 @@ void CEditor::Render()
 
 	//	a little hack for now
 	if(m_Mode == MODE_LAYERS)
-		DoMapEditor(View, ToolBar);
+		DoMapEditor(View);
 
 	// do zooming
 	if(Input()->KeyPress(KEY_KP_MINUS))
@@ -4235,12 +4159,12 @@ void CEditor::Render()
 		}
 	}
 
-
-	if(m_Mode == MODE_LAYERS)
-		RenderLayers(ToolBox, ToolBar, View);
+	if(m_Mode == MODE_LAYERS && m_GuiActive)
+		RenderLayers(ToolBox, View);
 	else if(m_Mode == MODE_IMAGES)
 	{
-		RenderImagesList(ToolBox, ToolBar);
+		if(m_GuiActive)
+			RenderImagesList(ToolBox);
 		RenderSelectedImage(View);
 	}
 

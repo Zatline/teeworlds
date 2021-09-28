@@ -3,7 +3,59 @@
 #ifndef GAME_CLIENT_UI_H
 #define GAME_CLIENT_UI_H
 
+#include <engine/input.h>
 #include "ui_rect.h"
+
+class IScrollbarScale
+{
+public:
+	virtual float ToRelative(int AbsoluteValue, int Min, int Max) const = 0;
+	virtual int ToAbsolute(float RelativeValue, int Min, int Max) const = 0;
+};
+static class CLinearScrollbarScale : public IScrollbarScale
+{
+public:
+	float ToRelative(int AbsoluteValue, int Min, int Max) const
+	{
+		return (AbsoluteValue - Min) / (float)(Max - Min);
+	}
+	int ToAbsolute(float RelativeValue, int Min, int Max) const
+	{
+		return round_to_int(RelativeValue*(Max - Min) + Min + 0.1f);
+	}
+} const LinearScrollbarScale;
+static class CLogarithmicScrollbarScale : public IScrollbarScale
+{
+private:
+	int m_MinAdjustment;
+public:
+	CLogarithmicScrollbarScale(int MinAdjustment)
+	{
+		m_MinAdjustment = max(MinAdjustment, 1); // must be at least 1 to support Min == 0 with logarithm
+	}
+	float ToRelative(int AbsoluteValue, int Min, int Max) const
+	{
+		if(Min < m_MinAdjustment)
+		{
+			AbsoluteValue += m_MinAdjustment;
+			Min += m_MinAdjustment;
+			Max += m_MinAdjustment;
+		}
+		return (log(AbsoluteValue) - log(Min)) / (float)(log(Max) - log(Min));
+	}
+	int ToAbsolute(float RelativeValue, int Min, int Max) const
+	{
+		int ResultAdjustment = 0;
+		if(Min < m_MinAdjustment)
+		{
+			Min += m_MinAdjustment;
+			Max += m_MinAdjustment;
+			ResultAdjustment = -m_MinAdjustment;
+		}
+		return round_to_int(exp(RelativeValue*(log(Max) - log(Min)) + log(Min))) + ResultAdjustment;
+	}
+} LogarithmicScrollbarScale(25);
+
 
 class CUI
 {
@@ -25,6 +77,8 @@ class CUI
 	unsigned m_MouseButtons;
 	unsigned m_LastMouseButtons;
 
+	unsigned m_HotkeysPressed;
+
 	CUIRect m_Screen;
 
 	CUIRect m_aClips[MAX_CLIP_NESTING_DEPTH];
@@ -43,6 +97,9 @@ public:
 	static const vec4 ms_HighlightTextOutlineColor;
 	static const vec4 ms_TransparentTextColor;
 
+	static const float ms_ListheaderHeight;
+	static const float ms_FontmodHeight;
+
 	// TODO: Refactor: Fill this in
 	void Init(class CConfig *pConfig, class IGraphics *pGraphics, class IInput *pInput, class ITextRender *pTextRender) { m_pConfig = pConfig; m_pGraphics = pGraphics; m_pInput = pInput; m_pTextRender = pTextRender; CUIRect::Init(pGraphics); }
 	class CConfig *Config() const { return m_pConfig; }
@@ -57,6 +114,16 @@ public:
 		ALIGN_LEFT,
 		ALIGN_CENTER,
 		ALIGN_RIGHT,
+	};
+
+	enum
+	{
+		HOTKEY_ENTER = 1,
+		HOTKEY_ESCAPE = 2,
+		HOTKEY_UP = 4,
+		HOTKEY_DOWN = 8,
+		HOTKEY_DELETE = 16,
+		HOTKEY_TAB = 32,
 	};
 
 	void SetEnabled(bool Enabled) { m_Enabled = Enabled; }
@@ -89,11 +156,15 @@ public:
 
 	bool KeyPress(int Key) const;
 	bool KeyIsPressed(int Key) const;
+	bool ConsumeHotkey(unsigned Hotkey);
+	void ClearHotkeys() { m_HotkeysPressed = 0; }
+	void OnInput(const IInput::CEvent &e);
 
 	const CUIRect *Screen();
 	float PixelSize();
 	void MapScreen();
 
+	// clipping
 	void ClipEnable(const CUIRect *pRect);
 	void ClipDisable();
 	const CUIRect *ClipArea() const;
@@ -102,9 +173,17 @@ public:
 	bool DoButtonLogic(const void *pID, const CUIRect *pRect, int Button = 0);
 	bool DoPickerLogic(const void *pID, const CUIRect *pRect, float *pX, float *pY);
 
+	// labels
 	void DoLabel(const CUIRect *pRect, const char *pText, float FontSize, EAlignment Align, float LineWidth = -1.0f, bool MultiLine = true);
 	void DoLabelHighlighted(const CUIRect *pRect, const char *pText, const char *pHighlighted, float FontSize, const vec4 &TextColor, const vec4 &HighlightColor);
 
+	// scrollbars
+	float DoScrollbarV(const void *pID, const CUIRect *pRect, float Current);
+	float DoScrollbarH(const void *pID, const CUIRect *pRect, float Current);
+	void DoScrollbarOption(const void *pID, int *pOption, const CUIRect *pRect, const char *pStr, int Min, int Max, const IScrollbarScale *pScale = &LinearScrollbarScale, bool Infinite = false);
+	void DoScrollbarOptionLabeled(const void *pID, int *pOption, const CUIRect *pRect, const char *pStr, const char *apLabels[], int NumLabels, const IScrollbarScale *pScale = &LinearScrollbarScale);
+
+	// client ID
 	float DrawClientID(float FontSize, vec2 Position, int ID,
 					const vec4& BgColor = vec4(1.0f, 1.0f, 1.0f, 0.5f), const vec4& TextColor = vec4(0.1f, 0.1f, 0.1f, 1.0f));
 	float GetClientIDRectWidth(float FontSize);
