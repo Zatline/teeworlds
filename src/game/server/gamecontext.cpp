@@ -4,6 +4,7 @@
 
 #include <engine/shared/config.h>
 #include <engine/shared/memheap.h>
+#include <engine/storage.h>
 #include <engine/map.h>
 
 #include <generated/server_data.h>
@@ -189,6 +190,7 @@ void CGameContext::CreateSound(vec2 Pos, int Sound, int64 Mask)
 	}
 }
 
+// ----- send functions -----
 void CGameContext::SendChat(int ChatterClientID, int Mode, int To, const char *pText)
 {
 	char aBuf[256];
@@ -393,7 +395,7 @@ void CGameContext::EndVote(int Type, bool Force)
 	SendVoteSet(Type, -1);
 }
 
-void CGameContext::ForceVote(int Type, const char *pDescription, const char *pReason)
+void CGameContext::SendForceVote(int Type, const char *pDescription, const char *pReason)
 {
 	CNetMsg_Sv_VoteSet Msg;
 	Msg.m_Type = Type;
@@ -435,7 +437,51 @@ void CGameContext::SendVoteStatus(int ClientID, int Total, int Yes, int No)
 	Msg.m_Pass = Total - (Yes+No);
 
 	Server()->SendPackMsg(&Msg, MSGFLAG_VITAL, ClientID);
+}
 
+void CGameContext::SendVoteClearOptions(int ClientID)
+{
+	CNetMsg_Sv_VoteClearOptions ClearMsg;
+	Server()->SendPackMsg(&ClearMsg, MSGFLAG_VITAL, ClientID);
+}
+
+void CGameContext::SendVoteOptions(int ClientID)
+{
+	CVoteOptionServer *pCurrent = m_pVoteOptionFirst;
+	while(pCurrent)
+	{
+		// count options for actual packet
+		int NumOptions = 0;
+		for(CVoteOptionServer *p = pCurrent; p && NumOptions < MAX_VOTE_OPTION_ADD; p = p->m_pNext, ++NumOptions);
+
+		// pack and send vote list packet
+		CMsgPacker Msg(NETMSGTYPE_SV_VOTEOPTIONLISTADD);
+		Msg.AddInt(NumOptions);
+		while(pCurrent && NumOptions--)
+		{
+			Msg.AddString(pCurrent->m_aDescription, VOTE_DESC_LENGTH);
+			pCurrent = pCurrent->m_pNext;
+		}
+		Server()->SendMsg(&Msg, MSGFLAG_VITAL, ClientID);
+	}
+}
+
+void CGameContext::SendTuningParams(int ClientID)
+{
+	CheckPureTuning();
+
+	CMsgPacker Msg(NETMSGTYPE_SV_TUNEPARAMS);
+	int *pParams = (int *)&m_Tuning;
+	for(unsigned i = 0; i < sizeof(m_Tuning)/sizeof(int); i++)
+		Msg.AddInt(pParams[i]);
+	Server()->SendMsg(&Msg, MSGFLAG_VITAL, ClientID);
+}
+
+void CGameContext::SendReadyToEnter(CPlayer *pPlayer)
+{
+	pPlayer->m_IsReadyToEnter = true;
+	CNetMsg_Sv_ReadyToEnter m;
+	Server()->SendPackMsg(&m, MSGFLAG_VITAL|MSGFLAG_FLUSH, pPlayer->GetCID());
 }
 
 void CGameContext::AbortVoteOnDisconnect(int ClientID)
@@ -471,17 +517,6 @@ void CGameContext::CheckPureTuning()
 			m_Tuning = p;
 		}
 	}
-}
-
-void CGameContext::SendTuningParams(int ClientID)
-{
-	CheckPureTuning();
-
-	CMsgPacker Msg(NETMSGTYPE_SV_TUNEPARAMS);
-	int *pParams = (int *)&m_Tuning;
-	for(unsigned i = 0; i < sizeof(m_Tuning)/sizeof(int); i++)
-		Msg.AddInt(pParams[i]);
-	Server()->SendMsg(&Msg, MSGFLAG_VITAL, ClientID);
 }
 
 void CGameContext::SwapTeams()
@@ -685,7 +720,7 @@ void CGameContext::OnClientEnter(int ClientID)
 		ClientInfoMsg.m_pName = Server()->ClientName(i);
 		ClientInfoMsg.m_pClan = Server()->ClientClan(i);
 		ClientInfoMsg.m_Country = Server()->ClientCountry(i);
-		ClientInfoMsg.m_Silent = false;
+		ClientInfoMsg.m_Silent = true;
 		for(int p = 0; p < NUM_SKINPARTS; p++)
 		{
 			ClientInfoMsg.m_apSkinPartNames[p] = m_apPlayers[i]->m_TeeInfos.m_aaSkinPartNames[p];
@@ -754,6 +789,7 @@ void CGameContext::OnClientDrop(int ClientID, const char *pReason)
 		if(Server()->DemoRecorder_IsRecording())
 		{
 			CNetMsg_De_ClientLeave Msg;
+			Msg.m_ClientID = ClientID;
 			Msg.m_pName = Server()->ClientName(ClientID);
 			Msg.m_pReason = pReason;
 			Server()->SendPackMsg(&Msg, MSGFLAG_NOSEND, -1);
@@ -901,7 +937,7 @@ void CGameContext::OnMessage(int MsgID, CUnpacker *pUnpacker, int ClientID)
 							Server()->SetRconCID(ClientID);
 							Console()->ExecuteLine(aCmd);
 							Server()->SetRconCID(IServer::RCON_CID_SERV);
-							ForceVote(VOTE_START_OP, aDesc, pReason);
+							SendForceVote(VOTE_START_OP, aDesc, pReason);
 							return;
 						}
 						m_VoteType = VOTE_START_OP;
@@ -972,7 +1008,7 @@ void CGameContext::OnMessage(int MsgID, CUnpacker *pUnpacker, int ClientID)
 					Server()->SetRconCID(ClientID);
 					Console()->ExecuteLine(aCmd);
 					Server()->SetRconCID(IServer::RCON_CID_SERV);
-					ForceVote(VOTE_START_SPEC, aDesc, pReason);
+					SendForceVote(VOTE_START_SPEC, aDesc, pReason);
 					return;
 				}
 				m_VoteType = VOTE_START_SPEC;
@@ -1041,7 +1077,7 @@ void CGameContext::OnMessage(int MsgID, CUnpacker *pUnpacker, int ClientID)
 
 			pPlayer->m_LastSetSpectatorModeTick = Server()->Tick();
 			if(!pPlayer->SetSpectatorID(pMsg->m_SpecMode, pMsg->m_SpectatorID))
-				SendGameMsg(GAMEMSG_SPEC_INVALIDID, ClientID);
+				SendGameMsg(GAMEMSG_SPEC_INVALID_ID, ClientID);
 		}
 		else if (MsgID == NETMSGTYPE_CL_EMOTICON && !m_World.m_Paused)
 		{
@@ -1126,35 +1162,10 @@ void CGameContext::OnMessage(int MsgID, CUnpacker *pUnpacker, int ClientID)
 
 			m_pController->OnPlayerInfoChange(pPlayer);
 
-			// send vote options
-			CNetMsg_Sv_VoteClearOptions ClearMsg;
-			Server()->SendPackMsg(&ClearMsg, MSGFLAG_VITAL, ClientID);
-
-			CVoteOptionServer *pCurrent = m_pVoteOptionFirst;
-			while(pCurrent)
-			{
-				// count options for actual packet
-				int NumOptions = 0;
-				for(CVoteOptionServer *p = pCurrent; p && NumOptions < MAX_VOTE_OPTION_ADD; p = p->m_pNext, ++NumOptions);
-
-				// pack and send vote list packet
-				CMsgPacker Msg(NETMSGTYPE_SV_VOTEOPTIONLISTADD);
-				Msg.AddInt(NumOptions);
-				while(pCurrent && NumOptions--)
-				{
-					Msg.AddString(pCurrent->m_aDescription, VOTE_DESC_LENGTH);
-					pCurrent = pCurrent->m_pNext;
-				}
-				Server()->SendMsg(&Msg, MSGFLAG_VITAL, ClientID);
-			}
-
-			// send tuning parameters to client
+			SendVoteClearOptions(ClientID);
+			SendVoteOptions(ClientID);
 			SendTuningParams(ClientID);
-
-			// client is ready to enter
-			pPlayer->m_IsReadyToEnter = true;
-			CNetMsg_Sv_ReadyToEnter m;
-			Server()->SendPackMsg(&m, MSGFLAG_VITAL|MSGFLAG_FLUSH, ClientID);
+			SendReadyToEnter(pPlayer);
 		}
 	}
 }
@@ -1163,26 +1174,63 @@ void CGameContext::ConTuneParam(IConsole::IResult *pResult, void *pUserData)
 {
 	CGameContext *pSelf = (CGameContext *)pUserData;
 	const char *pParamName = pResult->GetString(0);
-	float NewValue = pResult->GetFloat(1);
 
-	if(pSelf->Tuning()->Set(pParamName, NewValue))
+	char aBuf[256];
+	if(pResult->NumArguments() == 2)
 	{
-		char aBuf[256];
-		str_format(aBuf, sizeof(aBuf), "%s changed to %.2f", pParamName, NewValue);
-		pSelf->Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "tuning", aBuf);
-		pSelf->SendTuningParams(-1);
+		float NewValue = pResult->GetFloat(1);
+		if(pSelf->Tuning()->Set(pParamName, NewValue) && pSelf->Tuning()->Get(pParamName, &NewValue))
+		{
+			str_format(aBuf, sizeof(aBuf), "%s changed to %.2f", pParamName, NewValue);
+			pSelf->SendTuningParams(-1);
+		}
+		else
+		{
+			str_format(aBuf, sizeof(aBuf), "No such tuning parameter: %s", pParamName);
+		}
 	}
 	else
-		pSelf->Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "tuning", "No such tuning parameter");
+	{
+		float Value;
+		if(pSelf->Tuning()->Get(pParamName, &Value))
+		{
+			str_format(aBuf, sizeof(aBuf), "%s %.2f", pParamName, Value);
+		}
+		else
+		{
+			str_format(aBuf, sizeof(aBuf), "No such tuning parameter: %s", pParamName);
+		}
+	}
+	pSelf->Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "tuning", aBuf);
 }
 
 void CGameContext::ConTuneReset(IConsole::IResult *pResult, void *pUserData)
 {
 	CGameContext *pSelf = (CGameContext *)pUserData;
 	CTuningParams TuningParams;
-	*pSelf->Tuning() = TuningParams;
-	pSelf->SendTuningParams(-1);
-	pSelf->Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "tuning", "Tuning reset");
+
+	if(pResult->NumArguments())
+	{
+		const char *pParamName = pResult->GetString(0);
+		float DefaultValue = 0.0f;
+		char aBuf[256];
+		if(TuningParams.Get(pParamName, &DefaultValue) && pSelf->Tuning()->Set(pParamName, DefaultValue))
+		{
+			str_format(aBuf, sizeof(aBuf), "%s reset to %.2f", pParamName, DefaultValue);
+			pSelf->SendTuningParams(-1);
+		}
+		else
+		{
+			str_format(aBuf, sizeof(aBuf), "No such tuning parameter: %s", pParamName);
+		}
+		pSelf->Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "tuning", aBuf);
+	}
+	else
+	{
+		*pSelf->Tuning() = TuningParams;
+		pSelf->SendTuningParams(-1);
+		pSelf->Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "tuning", "Tuning reset");
+	}
 }
 
 void CGameContext::ConTunes(IConsole::IResult *pResult, void *pUserData)
@@ -1452,8 +1500,7 @@ void CGameContext::ConClearVotes(IConsole::IResult *pResult, void *pUserData)
 	CGameContext *pSelf = (CGameContext *)pUserData;
 
 	pSelf->Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "server", "cleared votes");
-	CNetMsg_Sv_VoteClearOptions VoteClearOptionsMsg;
-	pSelf->Server()->SendPackMsg(&VoteClearOptionsMsg, MSGFLAG_VITAL, -1);
+	pSelf->SendVoteClearOptions(-1);
 	pSelf->m_pVoteOptionHeap->Reset();
 	pSelf->m_pVoteOptionFirst = 0;
 	pSelf->m_pVoteOptionLast = 0;
@@ -1514,8 +1561,8 @@ void CGameContext::OnConsoleInit()
 	m_pConfig = Kernel()->RequestInterface<IConfigManager>()->Values();
 	m_pConsole = Kernel()->RequestInterface<IConsole>();
 
-	Console()->Register("tune", "s[tuning] i[value]", CFGFLAG_SERVER, ConTuneParam, this, "Tune variable to value");
-	Console()->Register("tune_reset", "", CFGFLAG_SERVER, ConTuneReset, this, "Reset all tuning variables to defaults");
+	Console()->Register("tune", "s[tuning] ?i[value]", CFGFLAG_SERVER, ConTuneParam, this, "Tune variable to value or show current value");
+	Console()->Register("tune_reset", "?s[tuning]", CFGFLAG_SERVER, ConTuneReset, this, "Reset all or one tuning variable to default");
 	Console()->Register("tunes", "", CFGFLAG_SERVER, ConTunes, this, "List all tuning variables and their values");
 
 	Console()->Register("pause", "?i[seconds]", CFGFLAG_SERVER|CFGFLAG_STORE, ConPause, this, "Pause/unpause game");
@@ -1554,6 +1601,7 @@ void CGameContext::OnInit()
 	m_pServer = Kernel()->RequestInterface<IServer>();
 	m_pConfig = Kernel()->RequestInterface<IConfigManager>()->Values();
 	m_pConsole = Kernel()->RequestInterface<IConsole>();
+	m_pStorage = Kernel()->RequestInterface<IStorage>();
 	m_World.SetGameServer(this);
 	m_Events.SetGameServer(this);
 	m_CommandManager.Init(m_pConsole, this, NewCommandHook, RemoveCommandHook);

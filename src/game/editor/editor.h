@@ -545,21 +545,14 @@ public:
 		m_PopupEventWasActivated = false;
 
 		m_FileDialogStorageType = 0;
-		m_aFileDialogFilterString[0] = '\0';
-		m_FileDialogFilterInput.SetBuffer(m_aFileDialogFilterString, sizeof(m_aFileDialogFilterString));
 		m_pFileDialogTitle = 0;
 		m_pFileDialogButtonText = 0;
 		m_pFileDialogUser = 0;
-		m_aFileDialogFileName[0] = 0;
 		m_aFileDialogCurrentFolder[0] = 0;
 		m_aFileDialogCurrentLink[0] = 0;
 		m_pFileDialogPath = m_aFileDialogCurrentFolder;
-		m_aFileDialogActivate = false;
-		m_FileDialogScrollValue = 0.0f;
 		m_FilesSelectedIndex = -1;
-		m_FilesStartAt = 0;
-		m_FilesCur = 0;
-		m_FilesStopAt = 999;
+		m_aFilesSelectedName[0] = '\0';
 
 		m_WorldOffsetX = 0;
 		m_WorldOffsetY = 0;
@@ -570,6 +563,11 @@ public:
 		m_ZoomLevel = 200;
 		m_LockMouse = false;
 		m_ShowMousePointer = true;
+
+		m_MouseX = 0.0f;
+		m_MouseY = 0.0f;
+		m_MouseWorldX = 0.0f;
+		m_MouseWorldY = 0.0f;
 		m_MouseDeltaX = 0;
 		m_MouseDeltaY = 0;
 		m_MouseDeltaWx = 0;
@@ -599,9 +597,11 @@ public:
 	}
 
 	virtual void Init();
-	virtual void UpdateAndRender();
+	virtual void OnUpdate();
+	virtual void OnRender();
 	virtual bool HasUnsavedData() const { return m_Map.m_Modified; }
 
+	void RefreshFilteredFileList();
 	void FilelistPopulate(int StorageType);
 	void InvokeFileDialog(int StorageType, int FileType, const char *pTitle, const char *pButtonText,
 		const char *pBasepath, const char *pDefaultName,
@@ -665,17 +665,15 @@ public:
 	const char *m_pFileDialogButtonText;
 	void (*m_pfnFileDialogFunc)(const char *pFileName, int StorageType, void *pUser);
 	void *m_pFileDialogUser;
-	char m_aFileDialogFileName[IO_MAX_PATH_LENGTH];
+	CLineInputBuffered<static_cast<int>(IO_MAX_PATH_LENGTH)> m_FileDialogFileNameInput;
 	char m_aFileDialogCurrentFolder[IO_MAX_PATH_LENGTH];
 	char m_aFileDialogCurrentLink[IO_MAX_PATH_LENGTH];
 	char *m_pFileDialogPath;
-	bool m_aFileDialogActivate;
 	int m_FileDialogFileType;
-	float m_FileDialogScrollValue;
 	int m_FilesSelectedIndex;
-	char m_aFileDialogFilterString[64];
-	CLineInput m_FileDialogFilterInput;
-	char m_aFileDialogNewFolderName[64];
+	char m_aFilesSelectedName[IO_MAX_PATH_LENGTH];
+	CLineInputBuffered<64> m_FileDialogFilterInput;
+	CLineInputBuffered<64> m_FileDialogNewFolderNameInput;
 	char m_aFileDialogErrString[64];
 	IGraphics::CTextureHandle m_FilePreviewImage;
 	bool m_PreviewImageIsLoaded;
@@ -694,10 +692,8 @@ public:
 														m_IsDir && !Other.m_IsDir ? true : !m_IsDir && Other.m_IsDir ? false :
 														str_comp_filenames(m_aFilename, Other.m_aFilename) < 0; }
 	};
-	sorted_array<CFilelistItem> m_FileList;
-	int m_FilesStartAt;
-	int m_FilesCur;
-	int m_FilesStopAt;
+	sorted_array<CFilelistItem> m_CompleteFileList;
+	sorted_array<CFilelistItem *> m_FilteredFileList;
 
 	float m_WorldOffsetX;
 	float m_WorldOffsetY;
@@ -709,6 +705,11 @@ public:
 	bool m_ShowMousePointer;
 	bool m_GuiActive;
 	bool m_ProofBorders;
+
+	float m_MouseX;
+	float m_MouseY;
+	float m_MouseWorldX;
+	float m_MouseWorldY;
 	float m_MouseDeltaX;
 	float m_MouseDeltaY;
 	float m_MouseDeltaWx;
@@ -771,13 +772,12 @@ public:
 	int DoButton_ButtonDec(const void *pID, const char *pText, int Checked, const CUIRect *pRect, int Flags, const char *pToolTip);
 	int DoButton_ButtonInc(const void *pID, const char *pText, int Checked, const CUIRect *pRect, int Flags, const char *pToolTip);
 
-	int DoButton_File(const void *pID, const char *pText, int Checked, const CUIRect *pRect, int Flags, const char *pToolTip);
 	int DoButton_Image(const void *pID, const char *pText, int Checked, const CUIRect *pRect, int Flags, const char *pToolTip, bool Used);
 
 	int DoButton_Menu(const void *pID, const char *pText, int Checked, const CUIRect *pRect, int Flags, const char *pToolTip);
 	int DoButton_MenuItem(const void *pID, const char *pText, int Checked, const CUIRect *pRect, int Flags=0, const char *pToolTip=0);
 
-	bool DoEditBox(CLineInput *pLineInput, const CUIRect *pRect, float FontSize) { return UI()->DoEditBox(pLineInput, pRect, FontSize, false, CUIRect::CORNER_ALL, &LightButtonColorFunction); }
+	bool DoEditBox(CLineInput *pLineInput, const CUIRect *pRect, float FontSize) { return UI()->DoEditBox(pLineInput, pRect, FontSize, CUIRect::CORNER_ALL, &LightButtonColorFunction); }
 
 	void RenderBackground(CUIRect View, IGraphics::CTextureHandle Texture, float Size, float Brightness);
 
@@ -828,7 +828,7 @@ public:
 
 	void RenderImagesList(CUIRect Toolbox);
 	void RenderSelectedImage(CUIRect View);
-	void RenderLayers(CUIRect Toolbox, CUIRect View);
+	void RenderLayers(CUIRect LayersBox);
 	void RenderModebar(CUIRect View);
 	void RenderStatusbar(CUIRect View);
 	void RenderEnvelopeEditor(CUIRect View);
@@ -836,7 +836,6 @@ public:
 	void RenderMenubar(CUIRect Menubar);
 	void RenderFileDialog();
 
-	void AddFileDialogEntry(int Index, CUIRect *pView);
 	void SortImages();
 	static void ExtractName(const char *pFileName, char *pName, int BufferSize)
 	{

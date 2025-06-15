@@ -109,7 +109,7 @@ void CControls::OnMessage(int Msg, void *pRawMsg)
 
 int CControls::SnapInput(int *pData)
 {
-	static int64 LastSendTime = 0;
+	static int64 s_LastSendTime = 0;
 	bool Send = false;
 
 	// update player state
@@ -134,7 +134,7 @@ int CControls::SnapInput(int *pData)
 		mem_copy(pData, &m_InputData, sizeof(m_InputData));
 
 		// send once a second just to be sure
-		if(time_get() > LastSendTime + time_freq())
+		if(time_get() > s_LastSendTime + time_freq())
 			Send = true;
 	}
 	else
@@ -155,6 +155,7 @@ int CControls::SnapInput(int *pData)
 			m_InputData.m_Direction = 1;
 
 		// stress testing
+#ifdef CONF_DEBUG
 		if(Config()->m_DbgStress)
 		{
 			float t = Client()->LocalTime();
@@ -168,6 +169,7 @@ int CControls::SnapInput(int *pData)
 			m_InputData.m_TargetX = (int)(sinf(t*3)*100.0f);
 			m_InputData.m_TargetY = (int)(cosf(t*3)*100.0f);
 		}
+#endif
 
 		// check if we need to send input
 		if(m_InputData.m_Direction != m_LastData.m_Direction) Send = true;
@@ -179,7 +181,7 @@ int CControls::SnapInput(int *pData)
 		else if(m_InputData.m_PrevWeapon != m_LastData.m_PrevWeapon) Send = true;
 
 		// send at at least 10hz
-		if(time_get() > LastSendTime + time_freq()/25)
+		if(time_get() > s_LastSendTime + time_freq()/25)
 			Send = true;
 	}
 
@@ -189,7 +191,7 @@ int CControls::SnapInput(int *pData)
 	if(!Send)
 		return 0;
 
-	LastSendTime = time_get();
+	s_LastSendTime = time_get();
 	mem_copy(pData, &m_InputData, sizeof(m_InputData));
 	return sizeof(m_InputData);
 }

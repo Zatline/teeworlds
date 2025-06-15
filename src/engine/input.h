@@ -17,7 +17,7 @@ public:
 	public:
 		int m_Flags;
 		int m_Key;
-		char m_aText[32];
+		char m_aText[32*UTF8_BYTE_LENGTH+1];
 		int m_InputCount;
 	};
 
@@ -38,10 +38,18 @@ public:
 		FLAG_RELEASE=2,
 		FLAG_REPEAT=4,
 		FLAG_TEXT=8,
+		FLAG_TEXTEDIT=16,
 
 		CURSOR_NONE = 0,
 		CURSOR_MOUSE,
 		CURSOR_JOYSTICK,
+
+		MAX_CANDIDATES = 16,
+		MAX_CANDIDATE_LENGTH = 16,
+		MAX_CANDIDATE_ARRAY_SIZE=MAX_CANDIDATE_LENGTH*UTF8_BYTE_LENGTH+1,
+		MAX_COMPOSITION_ARRAY_SIZE = 32, // SDL2 limitation
+
+		COMP_LENGTH_INACTIVE = -1
 	};
 
 	// events
@@ -92,6 +100,19 @@ public:
 	virtual const char *GetClipboardText() = 0;
 	virtual void SetClipboardText(const char *pText) = 0;
 
+	// text editing
+	virtual void StartTextInput() = 0;
+	virtual void StopTextInput() = 0;
+	virtual const char *GetComposition() const = 0;
+	virtual bool HasComposition() const = 0;
+	virtual int GetCompositionCursor() const = 0;
+	virtual int GetCompositionSelectedLength() const = 0;
+	virtual int GetCompositionLength() const = 0;
+	virtual const char *GetCandidate(int Index) const = 0;
+	virtual int GetCandidateCount() const = 0;
+	virtual int GetCandidateSelectedIndex() const = 0;
+	virtual void SetCompositionWindowPosition(float X, float Y, float H) = 0;
+
 	int CursorRelative(float *pX, float *pY)
 	{
 		if(MouseRelative(pX, pY))
@@ -109,6 +130,7 @@ class IEngineInput : public IInput
 	MACRO_INTERFACE("engineinput", 0)
 public:
 	virtual void Init() = 0;
+	virtual void Shutdown() = 0;
 	virtual int Update() = 0;
 };
 

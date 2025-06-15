@@ -193,8 +193,11 @@ void CHud::RenderNetworkIssueNotification()
 
 void CHud::RenderDeadNotification()
 {
-	if(m_pClient->m_Snap.m_pGameData->m_GameStateFlags == 0 && m_pClient->m_aClients[m_pClient->m_LocalClientID].m_Team != TEAM_SPECTATORS &&
-		m_pClient->m_Snap.m_pLocalInfo && (m_pClient->m_Snap.m_pLocalInfo->m_PlayerFlags&PLAYERFLAG_DEAD))
+	if(m_pClient->m_Snap.m_pGameData->m_GameStateFlags == 0
+		&& m_pClient->m_LocalClientID != -1
+		&& m_pClient->m_aClients[m_pClient->m_LocalClientID].m_Team != TEAM_SPECTATORS
+		&& m_pClient->m_Snap.m_pLocalInfo
+		&& (m_pClient->m_Snap.m_pLocalInfo->m_PlayerFlags&PLAYERFLAG_DEAD))
 	{
 		static CTextCursor s_Cursor(16.0f);
 		s_Cursor.MoveTo(150*Graphics()->ScreenAspect(), 50);
@@ -334,7 +337,7 @@ void CHud::RenderScoreHud()
 				}
 			}
 			// search local player info if not a spectator, nor within top2 scores
-			if(Local == -1 && m_pClient->m_aClients[m_pClient->m_LocalClientID].m_Team != TEAM_SPECTATORS)
+			if(Local == -1 && m_pClient->m_LocalClientID != -1 && m_pClient->m_aClients[m_pClient->m_LocalClientID].m_Team != TEAM_SPECTATORS)
 			{
 				for(; i < MAX_CLIENTS && m_pClient->m_Snap.m_aInfoByScore[i].m_pPlayerInfo; ++i)
 				{
@@ -471,7 +474,7 @@ void CHud::RenderWarmupTimer()
 			}
 			else
 			{
-				str_format(aBuf, sizeof(aBuf), Localize("wait for more players"));
+				str_format(aBuf, sizeof(aBuf), Localize("waiting for more players"));
 				if(m_WarmupHideTick == 0)
 					m_WarmupHideTick = time_get();
 			}
@@ -610,11 +613,11 @@ void CHud::RenderVoting()
 	char aBufYes[64], aBufNo[64];
 	m_pClient->m_pBinds->GetKey("vote yes", aBufYes, sizeof(aBufYes));
 	m_pClient->m_pBinds->GetKey("vote no", aBufNo, sizeof(aBufNo));
-	str_format(aBuf, sizeof(aBuf), "%s - %s", aBufYes, Localize("Vote yes"));
+	str_format(aBuf, sizeof(aBuf), "%s - %s", aBufYes, Localize("Vote Yes"));
 	Base.y += Base.h+1;
 	UI()->DoLabel(&Base, aBuf, 6.0f, TEXTALIGN_LEFT);
 
-	str_format(aBuf, sizeof(aBuf), "%s - %s", Localize("Vote no"), aBufNo);
+	str_format(aBuf, sizeof(aBuf), "%s - %s", Localize("Vote No"), aBufNo);
 	UI()->DoLabel(&Base, aBuf, 6.0f, TEXTALIGN_RIGHT);
 }
 
@@ -629,7 +632,7 @@ void CHud::RenderCursor()
 	Graphics()->QuadsBegin();
 
 	// render cursor
-	RenderTools()->SelectSprite(g_pData->m_Weapons.m_aId[m_pClient->m_Snap.m_pLocalCharacter->m_Weapon%NUM_WEAPONS].m_pSpriteCursor);
+	RenderTools()->SelectSprite(g_pData->m_Weapons.m_aId[maximum(0, m_pClient->m_Snap.m_pLocalCharacter->m_Weapon%NUM_WEAPONS)].m_pSpriteCursor);
 	float CursorSize = 64;
 	RenderTools()->DrawSprite(m_pClient->m_pControls->m_TargetPos.x, m_pClient->m_pControls->m_TargetPos.y, CursorSize);
 	Graphics()->QuadsEnd();
@@ -729,7 +732,7 @@ void CHud::RenderHealthAndAmmo(const CNetObj_Character *pCharacter)
 	}
 	else
 	{
-		RenderTools()->SelectSprite(g_pData->m_Weapons.m_aId[pCharacter->m_Weapon%NUM_WEAPONS].m_pSpriteProj);
+		RenderTools()->SelectSprite(g_pData->m_Weapons.m_aId[maximum(0, pCharacter->m_Weapon%NUM_WEAPONS)].m_pSpriteProj);
 		if(pCharacter->m_Weapon == WEAPON_GRENADE)
 		{
 			for(i = 0; i < minimum(pCharacter->m_AmmoCount, 10); i++)
@@ -799,7 +802,7 @@ void CHud::RenderSpectatorHud()
 	switch(SpecMode)
 	{
 	case SPEC_FREEVIEW:
-		str_format(aBuf, sizeof(aBuf), "%s", Localize("Free-View"));
+		str_format(aBuf, sizeof(aBuf), "%s", Localize("Free View"));
 		break;
 	case SPEC_PLAYER:
 		str_format(aBuf, sizeof(aBuf), "%s", pName);
@@ -826,8 +829,9 @@ void CHud::RenderSpectatorHud()
 
 void CHud::RenderSpectatorNotification()
 {
-	if(m_pClient->m_aClients[m_pClient->m_LocalClientID].m_Team == TEAM_SPECTATORS &&
-		m_pClient->m_TeamChangeTime + 5.0f >= Client()->LocalTime())
+	if(m_pClient->m_LocalClientID != -1
+		&& m_pClient->m_aClients[m_pClient->m_LocalClientID].m_Team == TEAM_SPECTATORS
+		&& m_pClient->m_TeamChangeTime + 5.0f >= Client()->LocalTime())
 	{
 		// count non spectators
 		int NumPlayers = 0;
@@ -837,7 +841,7 @@ void CHud::RenderSpectatorNotification()
 		
 		if(NumPlayers > 0)
 		{
-			const char *pText = Localize("Click on a player or a flag to follow it");
+			const char *pText = Localize("Click on a player or flag to follow it");
 			static CTextCursor s_Cursor(16.0f);
 			s_Cursor.MoveTo(150 * Graphics()->ScreenAspect(), 30);
 			s_Cursor.m_Align = TEXTALIGN_TC;
@@ -849,7 +853,8 @@ void CHud::RenderSpectatorNotification()
 
 void CHud::RenderReadyUpNotification()
 {
-	if(!(m_pClient->m_Snap.m_paPlayerInfos[m_pClient->m_LocalClientID]->m_PlayerFlags&PLAYERFLAG_READY))
+	if(m_pClient->m_LocalClientID != -1
+		&& !(m_pClient->m_Snap.m_apPlayerInfos[m_pClient->m_LocalClientID]->m_PlayerFlags&PLAYERFLAG_READY))
 	{
 		static CTextCursor s_Cursor(16.0f);
 
@@ -987,9 +992,9 @@ void CHud::OnRender()
 		if(m_pClient->m_Snap.m_pLocalCharacter && !(m_pClient->m_Snap.m_pGameData->m_GameStateFlags&(GAMESTATEFLAG_ROUNDOVER|GAMESTATEFLAG_GAMEOVER)))
 		{
 			RenderHealthAndAmmo(m_pClient->m_Snap.m_pLocalCharacter);
-			if(Race)
+			if(Race && m_pClient->m_LocalClientID != -1)
 			{
-				RenderRaceTime(m_pClient->m_Snap.m_paPlayerInfosRace[m_pClient->m_LocalClientID]);
+				RenderRaceTime(m_pClient->m_Snap.m_apPlayerInfosRace[m_pClient->m_LocalClientID]);
 				RenderCheckpoint();
 			}
 		}
@@ -1000,7 +1005,7 @@ void CHud::OnRender()
 				RenderHealthAndAmmo(&m_pClient->m_Snap.m_aCharacters[m_pClient->m_Snap.m_SpecInfo.m_SpectatorID].m_Cur);
 				if(Race)
 				{
-					RenderRaceTime(m_pClient->m_Snap.m_paPlayerInfosRace[m_pClient->m_Snap.m_SpecInfo.m_SpectatorID]);
+					RenderRaceTime(m_pClient->m_Snap.m_apPlayerInfosRace[m_pClient->m_Snap.m_SpecInfo.m_SpectatorID]);
 					RenderCheckpoint();
 				}
 			}
